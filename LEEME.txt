@@ -17,6 +17,10 @@ Cómo empezar
 4. Pulsa JUGAR (Enter, o Start / A en el mando).
 
 La carpeta es portátil: puedes moverla o copiarla a otro PC y sigue funcionando.
+
+Actualizaciones: al abrirse, el lanzador comprueba si hay una versión nueva en
+GitHub y lo avisa abajo a la derecha. Pulsa "Actualizar": se descarga, se
+comprueba y se instala sola, sin tocar tu ROM, tus opciones ni tus partidas.
 Si usas mando, conéctalo antes de abrir el juego.
 
 El lanzador

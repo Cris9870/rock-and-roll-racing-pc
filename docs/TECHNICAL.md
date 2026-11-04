@@ -124,6 +124,19 @@ regen and configure), with a note in `patches/README.md`.
 - `src/rnrr.manifest` (embedded by `rnrr.rc`) sets the UTF-8 active code page, so ANSI paths
   (`GetModuleFileNameA`, `fopen`) work in folders with accents or ñ. Do not remove it.
 
+**Updates** (`src/rnrr_update.cpp`). At start the launcher asks
+`api.github.com/repos/Cris9870/rock-and-roll-racing-pc/releases/latest` (WinHTTP, background thread)
+and compares `tag_name` with `SNES_GAME_VERSION` (the `VERSION` file; "dev" builds never check).
+Install: download the asset named `RockAndRollRacingPC-windows.zip`, verify the asset's `digest`
+(sha256) when GitHub provides it, inflate every entry (stb_image's raw-deflate decoder; the input is
+padded with 8 zero bytes because stb errors on a stream that ends flush with its buffer) into
+`update-tmp/`, check each CRC-32, then rename the running exe to `.exe.old` (deleted on the next
+start), move the new one in (rolled back if that fails) and move the rest over. Builds without
+`RNRR_PUBLIC_BUILD` only link to the release page. Releases must keep the tag format `vX.Y.Z`, the
+asset name and the single top folder in the zip. Test hooks: `RNRR_UPDATE_API=<url>`,
+`RNRR_UPDATE_FAKE_VERSION=<x.y.z>`, `RNRR_LAUNCHER_UPDATE_TEST=1` (hidden window: check, install,
+quit; `[update]` lines on stderr) and `RNRR_UPDATE_TEST_RELAUNCH=1` (with `RNRR_LAUNCHER_SHOT`).
+
 **Debugging native-code bugs.** Bisect compiled functions with
 `SNESRECOMP_LLE_INTERP_TARGET_FILE`, a file of hex PCs forced to the interpreter. List **both**
 `$00xxxx` and `$80xxxx` mirrors, because matching is exact. The node list is in

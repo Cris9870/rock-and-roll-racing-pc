@@ -77,6 +77,7 @@ add_executable(RockNRollRacingSNESRecomp
     src/rnrr_launcher.cpp
     src/rnrr_revision.c
     src/rnrr_art.cpp
+    src/rnrr_update.cpp
     src/rnrr_shader_test.c
 )
 
@@ -164,6 +165,7 @@ snesrecomp_target_rom_cache(RockNRollRacingSNESRecomp)
 # port's own icon (tools/make_icon.py draws assets/icon/rnrr.ico).
 if(WIN32)
     target_link_options(RockNRollRacingSNESRecomp PRIVATE -mwindows)
+    target_link_libraries(RockNRollRacingSNESRecomp PRIVATE winhttp)
     enable_language(RC)
     target_sources(RockNRollRacingSNESRecomp PRIVATE src/rnrr.rc)
     set_source_files_properties(src/rnrr.rc PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/rnrr.manifest;${CMAKE_CURRENT_SOURCE_DIR}/assets/icon/rnrr.ico")

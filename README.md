@@ -25,6 +25,12 @@ das tu ROM la primera vez y a jugar.
 La carpeta es portátil: puedes moverla, copiarla a otro PC o llevarla en un USB. Las opciones y las
 partidas se guardan dentro de ella.
 
+**Actualizaciones automáticas** (desde la 1.0.2): al abrirse, el lanzador comprueba si hay una versión
+nueva en GitHub. Si la hay, lo avisa abajo a la derecha; pulsa **Actualizar** y se descarga, se
+comprueba y se instala sola en unos segundos, sin tocar tu ROM, tus opciones ni tus partidas. Sin
+conexión no hace nada. Si tienes la 1.0.0 o la 1.0.1, descarga la última versión a mano una vez y
+cópiala encima: a partir de ahí se actualiza sola.
+
 > **Windows protegió su PC**: al ser un programa nuevo y sin firma digital, Windows puede avisar la
 > primera vez. Pulsa **Más información → Ejecutar de todas formas**.
 
@@ -54,6 +60,7 @@ avisa si es otra versión o está dañada.
 | **Guardar** | Contraseñas entre carreras | **Partidas guardadas en cualquier momento** (10 ranuras) y **rebobinado**, también desde el mando |
 | **Pantalla** | — | Pantalla completa o ventana (Alt+Enter) |
 | **Lanzador** | — | En español, con el aspecto del juego, manejable con ratón, teclado o mando |
+| **Actualizaciones** | — | El lanzador avisa de las versiones nuevas y se actualiza solo con un botón |
 
 ## Capturas
 
@@ -100,6 +107,9 @@ misma tabla.
 
 - **¿Dónde se guardan las partidas y las opciones?** En la propia carpeta del programa: `saves\`,
   `config.ini` y `keybinds.ini`. Por eso conviene no ponerla en *Archivos de programa*.
+- **¿Cómo actualizo?** El lanzador te avisa cuando hay una versión nueva: pulsa **Actualizar**. La
+  descarga se verifica con la huella SHA-256 que publica GitHub antes de instalar nada; si algo
+  falla, tu versión actual queda intacta. También puedes descargar el zip y copiarlo encima.
 - **¿Cómo cambio de ROM?** Borra la carpeta `rom\` y vuelve a abrir el programa.
 - **¿Cómo lo quito?** Borra la carpeta. No instala nada ni escribe en el registro.
 - **¿Por qué el `.exe` de la descarga no es "recompilado"?** La descarga ejecuta el juego con el
@@ -130,6 +140,8 @@ para la ROM de EE. UU.; este proyecto añade:
 - **Filtros** (`assets/shaders/`): presets GLSL propios, como Scale2x + FXAA + bilineal nítido.
 - **Lanzador** (`src/rnrr_launcher.cpp`, Dear ImGui + SDL3): opciones, controles, comprobación de la
   ROM y su aspecto, que genera a partir de tu ROM en tu PC (`src/rnrr_art.cpp`).
+- **Actualizador** (`src/rnrr_update.cpp`): consulta la última release de GitHub, descarga el zip,
+  comprueba su SHA-256, lo descomprime aparte y solo entonces reemplaza los archivos del programa.
 - **Partidas guardadas desde el mando** y el menú de partidas traducido.
 - **Correcciones al motor** (`patches/snesrecomp.patch`): por ejemplo, a pantalla partida el juego
   cambia los sprites a mitad de imagen y el motor solo dibujaba los de la mitad inferior; ahora cada
@@ -195,6 +207,7 @@ unzip it, run `RockNRollRacingSNESRecomp.exe`, pick (or drop) your ROM and press
 true widescreen in races (16:9, 21:9 or fit-to-monitor; menus stay 4:3), jaggy-free image filters
 (Scale2x + FXAA), optional motion smoothing to your monitor's refresh rate, Xbox-style gamepads and a
 WASD/JIKL keyboard layout, save states and rewind from the pad (Select + RB), and a portable,
-game-styled Spanish launcher. The European release is fully tested; the USA release is supported by
+game-styled Spanish launcher that updates itself from GitHub Releases (one click, SHA-256 checked,
+player files untouched). The European release is fully tested; the USA release is supported by
 byte-signature patching but not yet verified, so reports are welcome. Non-commercial license
 (PolyForm Noncommercial 1.0.0).

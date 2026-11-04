@@ -8,6 +8,7 @@
 #include "rnrr_launcher.h"
 #include "rnrr_art.h"
 #include "rnrr_revision.h"
+#include "rnrr_update.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_opengl.h>
@@ -682,7 +683,8 @@ extern "C" int RnrrLauncherRun(const char *default_ini, const char *expected_sha
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_WindowFlags flags = SDL_WINDOW_OPENGL | (shot ? SDL_WINDOW_HIDDEN : 0);
+    SDL_WindowFlags flags = SDL_WINDOW_OPENGL |
+        (shot || SDL_getenv("RNRR_LAUNCHER_UPDATE_TEST") ? SDL_WINDOW_HIDDEN : 0);
     SDL_Window *window = SDL_CreateWindow("Rock & Roll Racing", win_w, win_h, flags);
     if (!window) { SDL_Quit(); return 2; }
     SDL_GLContext gl = SDL_GL_CreateContext(window);
@@ -728,6 +730,14 @@ extern "C" int RnrrLauncherRun(const char *default_ini, const char *expected_sha
     if (!exe_dir.empty() && exe_dir.back() != '/' && exe_dir.back() != '\\') exe_dir += '/';
     RnrrArtJob artjob;
     if (rinfo.state == ROM_OK && !SDL_getenv("RNRR_LAUNCHER_NO_ART")) artjob.start(exe_dir, rom, rinfo.sha);
+    /* Updates: ask GitHub in the background. Screenshot runs stay offline
+     * unless a test points the check somewhere (RNRR_UPDATE_*). */
+    RnrrUpdater::cleanup_old();
+    RnrrUpdater updater;
+    const bool update_hooks = SDL_getenv("RNRR_UPDATE_FAKE_VERSION") || SDL_getenv("RNRR_UPDATE_API");
+    const bool update_test = SDL_getenv("RNRR_LAUNCHER_UPDATE_TEST") != nullptr;  /* headless: check, install, quit */
+    if (!shot || update_hooks || update_test) updater.check();
+    bool relaunch = false;
     bool pick_failed = false;
     if (const char *t = SDL_getenv("RNRR_LAUNCHER_PICK")) {  /* test hook: as if the file was dropped */
         g_picked = t;
@@ -930,7 +940,11 @@ extern "C" int RnrrLauncherRun(const char *default_ini, const char *expected_sha
 
         float by = poster_b + 14 * s;
         ImGui::SetCursorScreenPos(ImVec2(pad, by));
-        if (play_button("JUGAR", ImVec2(left_w, play_h), rinfo.state == ROM_OK, fonts.button, s)) result = 1;
+        const RnrrUpdater::State ust = updater.state();
+        const bool updating = ust == RnrrUpdater::kDownloading || ust == RnrrUpdater::kInstalling ||
+                              ust == RnrrUpdater::kInstalled;
+        if (play_button("JUGAR", ImVec2(left_w, play_h), rinfo.state == ROM_OK && !updating, fonts.button, s))
+            result = 1;
         /* Keyboard/pad navigation starts on PLAY (Enter or A plays). */
         if (first_focus && rinfo.state == ROM_OK) {
             ImGui::SetItemDefaultFocus();
@@ -1028,6 +1042,80 @@ extern "C" int RnrrLauncherRun(const char *default_ini, const char *expected_sha
         ImGui::SetNextItemWidth(ctl_w);
         ImGui::SliderInt("##vol", &set.volume, 0, 100, set.volume ? "%d%%" : "Silencio");
 
+        if (ust == RnrrUpdater::kAvailable || updating || ust == RnrrUpdater::kFailed) {
+            // A newer release on GitHub: the tip's place becomes the update box.
+            const bool can = RnrrUpdater::can_install();
+            const std::string ver = updater.latest();
+            std::string title, body;
+            const char *btn = nullptr;
+            bool show_bar = false;
+            switch (ust) {
+            case RnrrUpdater::kAvailable:
+                title = "Nueva versión " + ver + " disponible";
+                body = can ? "Se descarga e instala sola. Tu ROM, tus opciones y tus partidas se conservan."
+                           : "Descárgala desde la página del proyecto en GitHub.";
+                btn = can ? "Actualizar" : "Ver en GitHub";
+                break;
+            case RnrrUpdater::kDownloading:
+                title = "Descargando la versión " + ver + "...";
+                show_bar = true;
+                break;
+            case RnrrUpdater::kInstalling:
+                title = "Instalando la versión " + ver + "...";
+                show_bar = true;
+                break;
+            case RnrrUpdater::kInstalled:
+                title = "Versión " + ver + " instalada. Reiniciando...";
+                break;
+            default:
+                title = "No se pudo actualizar";
+                body = updater.error() + ". También puedes descargarla desde GitHub.";
+                btn = can ? "Reintentar" : "Ver en GitHub";
+                break;
+            }
+            const float bl = ia.x + 12 * s, br = ib.x - 12 * s, bb = ib.y - 12 * s;
+            const float btn_w = btn ? 150 * s : 0, btn_h = 36 * s;
+            const float tx = bl + 20 * s, tw = br - tx - 14 * s - (btn ? btn_w + 16 * s : 0);
+            ImGui::PushFont(fonts.bold);
+            const float title_h = ImGui::GetFontSize();
+            ImGui::PopFont();
+            ImGui::PushFont(fonts.small);
+            const float body_h = body.empty() ? 0 : ImGui::CalcTextSize(body.c_str(), nullptr, false, tw).y;
+            ImGui::PopFont();
+            const float content_h = title_h + (body.empty() ? 0 : 6 * s + body_h) + (show_bar ? 14 * s : 0);
+            const float h = SDL_max(content_h, btn_h) + 20 * s;
+            const float bt = bb - h;
+            dl->AddRectFilled(ImVec2(bl, bt), ImVec2(br, bb), col32(0x000000, 0.45f), 6 * s);
+            dl->AddRectFilled(ImVec2(bl, bt), ImVec2(bl + 3 * s, bb), col32(0xffd23f), 0);
+            float ty = bt + (h - content_h) * 0.5f;
+            ImGui::PushFont(fonts.bold);
+            dl->AddText(ImVec2(tx, ty), ImGui::GetColorU32(ust == RnrrUpdater::kFailed ? kBad : kGold), title.c_str());
+            ImGui::PopFont();
+            ty += title_h;
+            if (!body.empty()) {
+                ty += 6 * s;
+                ImGui::PushFont(fonts.small);
+                dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(tx, ty), ImGui::GetColorU32(kMuted),
+                            body.c_str(), nullptr, tw);
+                ImGui::PopFont();
+            }
+            if (show_bar) {
+                ty += 6 * s;
+                dl->AddRectFilled(ImVec2(tx, ty), ImVec2(tx + tw, ty + 8 * s), col32(0x2a1414), 4 * s);
+                float p = ust == RnrrUpdater::kInstalling ? 1.0f : SDL_max(0.03f, updater.progress());
+                dl->AddRectFilledMultiColor(ImVec2(tx, ty), ImVec2(tx + tw * p, ty + 8 * s), col32(0xffd84a),
+                                            col32(0xff6a10), col32(0xff6a10), col32(0xffd84a));
+            }
+            if (btn) {
+                ImGui::SetCursorScreenPos(ImVec2(br - 14 * s - btn_w, bt + (h - btn_h) * 0.5f));
+                ImGui::PushFont(fonts.bold);
+                if (chip(btn, true, ImVec2(btn_w, btn_h), s)) {
+                    if (can) updater.install();
+                    else SDL_OpenURL(updater.page_url().c_str());
+                }
+                ImGui::PopFont();
+            }
+        } else
         {
             // The one tip worth keeping on screen: progress can be saved anywhere.
             ImGui::PushFont(fonts.small);
@@ -1097,7 +1185,31 @@ extern "C" int RnrrLauncherRun(const char *default_ini, const char *expected_sha
         glClearColor(0.05f, 0.02f, 0.02f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        if (shot && frame >= 6 && (!shot_waits_for_art || !artjob.running() || SDL_GetTicks() > shot_deadline)) {
+        if (ust == RnrrUpdater::kInstalled && !update_test) {
+            relaunch = true;  /* the new version opens in place of this one */
+            result = 0;
+        }
+        if (update_test) {
+            if (ust == RnrrUpdater::kAvailable && RnrrUpdater::can_install()) {
+                std::fprintf(stderr, "[update] %s available, installing\n", updater.latest().c_str());
+                updater.install();
+            } else if (ust == RnrrUpdater::kAvailable) {
+                std::fprintf(stderr, "[update] %s available (link only: %s)\n", updater.latest().c_str(),
+                             updater.page_url().c_str());
+                result = 0;
+            } else if (ust == RnrrUpdater::kInstalled || ust == RnrrUpdater::kFailed || ust == RnrrUpdater::kUpToDate) {
+                std::fprintf(stderr, "[update] %s %s\n",
+                             ust == RnrrUpdater::kInstalled ? "installed" : ust == RnrrUpdater::kFailed ? "failed:" : "up to date",
+                             ust == RnrrUpdater::kFailed ? updater.error().c_str() : updater.latest().c_str());
+                result = 0;
+                /* The relaunched exe inherits the environment: pair this with
+                 * RNRR_LAUNCHER_SHOT so it comes up hidden. */
+                relaunch = ust == RnrrUpdater::kInstalled && SDL_getenv("RNRR_UPDATE_TEST_RELAUNCH");
+            }
+        }
+        const bool shot_waits_update = (update_hooks || update_test) && ust == RnrrUpdater::kChecking;
+        if (shot && !update_test && frame >= 6 && !shot_waits_update &&
+            (!shot_waits_for_art || !artjob.running() || SDL_GetTicks() > shot_deadline)) {
             std::vector<uint8_t> px((size_t)fw * fh * 4);
             glReadBuffer(GL_BACK);
             glReadPixels(0, 0, fw, fh, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
@@ -1121,5 +1233,6 @@ extern "C" int RnrrLauncherRun(const char *default_ini, const char *expected_sha
     SDL_DestroyWindow(window);
     SDL_DestroyMutex(g_pick_lock);
     SDL_Quit();
+    if (relaunch) RnrrUpdater::relaunch();
     return result;
 }
