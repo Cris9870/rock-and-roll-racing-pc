@@ -29,3 +29,10 @@
 .DS_Store
 /release-linux/
 /release-windows/
+
+# Made on each player's machine from their own ROM, or written while playing
+/assets/launcher/
+/rom/
+/engine.cfg
+/mods/preloaded/state.toml
+/last_run_report.json

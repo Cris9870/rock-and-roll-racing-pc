@@ -3,25 +3,18 @@ id = "rnrr.display"
 version = "1.0.0"
 name = "Rock N' Roll Racing Display Enhancements"
 author = "RockNRollRacingSNESRecomp"
-description = "30 FPS race logic, true widescreen races and motion interpolation."
+description = "True widescreen races and motion interpolation (European and USA revisions)."
 license = "MIT"
 resolver = "declarative"
 save_compatibility = "shared"
 
 [[target]]
-game_id = "rocknrollracing-usa"
-rom_sha256 = "04cac1e7fed7c811fe12cde2a1ec2ac6bb9c3453e099fddcd914f2e6d76a1f50"
+game_id = "rocknrollracing"
+rom_sha256 = "94d761a7339804271bf77d541f46a1d211918336ce741b561bfc3ddcaca98ec7"
 
-[[feature]]
-id = "fps30"
-name = "30 FPS game logic"
-description = "Runs the race logic at 30 updates per second instead of the stock 20, with the original pacing; the ROM is never modified. Takes effect on the next launch. Off runs the unmodified game through the interpreter."
-group = "Game"
-default_enabled = true
-
-[[plugin]]
-feature = "fps30"
-id = "rnrr.fps30"
+[[target]]
+game_id = "rocknrollracing"
+rom_sha256 = "9d721753301278325c851f1843d669a697aed757dcf6495a31fc31ddf664b182"
 
 [[feature]]
 id = "widescreen"
@@ -140,23 +133,3 @@ label = "150%"
 [[option.choice]]
 value = "200"
 label = "200%"
-
-[[feature]]
-id = "msu1"
-name = "MSU-1 music"
-description = "Streams a CD-quality music pack. Select a folder containing the pack's .pcm tracks and its MSU-1 .ips or .bps patch; the stock ROM is patched in memory and runs through the interpreter."
-group = "Audio"
-default_enabled = false
-
-[[plugin]]
-feature = "msu1"
-id = "rnrr.msu1"
-
-[[resource]]
-feature = "msu1"
-id = "pack"
-label = "Music pack folder"
-description = "Folder with the MSU-1 .pcm tracks and the patch (.ips or .bps)."
-format = "directory"
-identity = "snes.msu1.pack"
-required = true

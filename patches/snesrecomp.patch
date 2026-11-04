@@ -1,3 +1,43 @@
+diff --git a/recompiler/v2/codegen.py b/recompiler/v2/codegen.py
+index c70e262..cb4c498 100644
+--- a/recompiler/v2/codegen.py
++++ b/recompiler/v2/codegen.py
+@@ -628,10 +628,33 @@ def _segref_addr_expr(seg: SegRef) -> tuple:
+ 
+ # ── Per-op handlers ─────────────────────────────────────────────────────────
+ 
++def _open_bus_operand_byte(seg) -> Optional[int]:
++    """The last instruction byte the CPU fetched before the data read, which
++    is what an unmapped address returns (open bus). Compiled code fetches no
++    instruction bytes, so without this the bus holds whatever an earlier
++    access left there. Indirect modes read their pointer through cpu_read*,
++    which already leaves the right byte on the bus."""
++    k = seg.kind
++    if k in (SegKind.DIRECT, SegKind.STACK):
++        return seg.offset & 0xFF
++    if k == SegKind.ABS_BANK:
++        return (seg.offset >> 8) & 0xFF
++    if k == SegKind.LONG:
++        return (seg.bank if seg.bank is not None else 0) & 0xFF
++    return None
++
++
+ def _emit_read(op: Read) -> List[str]:
+     bank, addr = _segref_addr_expr(op.seg)
+-    return [f"{widths.ctype(op.width)} {_v(op.out)} = "
+-            f"{widths.read_fn(op.width)}(cpu, {bank}, {addr});"]
++    lines = []
++    ob = _open_bus_operand_byte(op.seg)
++    if ob is not None:
++        # Rock N' Roll Racing's hero select does `LDA $5C00` with DB=$80
++        # (unmapped) and uses the open-bus $5C5C as a VRAM address.
++        lines.append(f"cpu->open_bus = {ob:#04x};")
++    lines.append(f"{widths.ctype(op.width)} {_v(op.out)} = "
++                 f"{widths.read_fn(op.width)}(cpu, {bank}, {addr});")
++    return lines
+ 
+ 
+ def _emit_write(op: Write) -> List[str]:
 diff --git a/runner/src/beam_frame_driver.c b/runner/src/beam_frame_driver.c
 index d6086b3..bb7aad6 100644
 --- a/runner/src/beam_frame_driver.c
@@ -375,7 +415,7 @@ index 25dcfe0..f753bf1 100644
        PPU_T0; PpuDrawWholeLine(ppu, line); PPU_ACC(g_ppu_sec_line_ms);
  #ifdef SNESRECOMP_INTERP_PROFILE
 diff --git a/runner/src/snes_savestate_menu.c b/runner/src/snes_savestate_menu.c
-index f42f1ab..08e9c6a 100644
+index f42f1ab..bcfbe2f 100644
 --- a/runner/src/snes_savestate_menu.c
 +++ b/runner/src/snes_savestate_menu.c
 @@ -79,6 +79,7 @@
@@ -386,17 +426,114 @@ index f42f1ab..08e9c6a 100644
  /* Netplay guest: a read-only mirror of the host's menu. */
  static int s_mirror;
  static int s_selected;
-@@ -283,7 +284,8 @@ static void rasterize_panel(void)
+@@ -282,8 +283,9 @@ static void rasterize_panel(void)
+         s_panel[i] = 0xFF0F1118u;
  
      fill_rect(s_panel, 0, 0, SSM_W, 40, 0xFF171B25u);
-     draw_text(s_panel, 20, 12, "SAVE STATES", 0xFFFFD24Du, 2);
+-    draw_text(s_panel, 20, 12, "SAVE STATES", 0xFFFFD24Du, 2);
 -    draw_text(s_panel, 384, 16, "SELECT+R MENU", 0xFFB8BDC8u, 1);
++    draw_text(s_panel, 20, 12, "PARTIDAS", 0xFFFFD24Du, 2);
 +    if (s_pad_chord)
-+        draw_text(s_panel, 384, 16, "SELECT+R MENU", 0xFFB8BDC8u, 1);
++        draw_text(s_panel, 308, 16, "MANDO: SELECT (VIEW)+RB", 0xFFB8BDC8u, 1);
  
      if (!s_thumbs_scanned)
          refresh_thumbs();
-@@ -552,6 +554,16 @@ uint32_t snes_savestate_menu_filter_guest_input(uint32_t inputs)
+@@ -308,8 +310,8 @@ static void rasterize_panel(void)
+         stroke_rect(s_panel, SSM_ROWS_X, y, SSM_ROWS_W, SSM_ROW_H,
+                     sel ? 0xFFFFD24Du : 0xFF303746u);
+ 
+-        if (i == SNES_SAVESTATE_QUICK_SLOT) snprintf(buf, sizeof(buf), "QUICK");
+-        else snprintf(buf, sizeof(buf), "SLOT %02d", i + 1);
++        if (i == SNES_SAVESTATE_QUICK_SLOT) snprintf(buf, sizeof(buf), "RAPIDA");
++        else snprintf(buf, sizeof(buf), "RANURA %02d", i + 1);
+         draw_text(s_panel, SSM_ROWS_X + 12, y + 14, buf, fg, 1);
+ 
+         if (s_have_thumb[i]) {
+@@ -327,7 +329,7 @@ static void rasterize_panel(void)
+              * which, rather than showing "NEW" over a slot that would
+              * overwrite something. */
+             draw_text(s_panel, SSM_ROWS_X + 122, y + 46,
+-                      slot_exists(i) ? "SAVED" : "NEW",
++                      slot_exists(i) ? "GUARDADA" : "VACIA",
+                       slot_exists(i) ? 0xFF9AA3B2u : 0xFF707887u, 1);
+         }
+ 
+@@ -335,21 +337,23 @@ static void rasterize_panel(void)
+         draw_text(s_panel, SSM_ROWS_X + 222, y + 42, buf, sub, 1);
+         if (sel)
+             draw_text(s_panel, SSM_ROWS_X + SSM_ROWS_W - 72, y + 84,
+-                      "SELECT", 0xFFFFD24Du, 1);
++                      "ELEGIDA", 0xFFFFD24Du, 1);
+     }
+ 
+     fill_rect(s_panel, 0, 388, SSM_W, SSM_H - 388, 0xFF171B25u);
+-    draw_snes_button(s_panel, 20, 398, 'A', 0xFF6BE06Bu);
+-    draw_text(s_panel, 44, 402, "LOAD", 0xFFE2E5EBu, 1);
+-    draw_snes_button(s_panel, 116, 398, 'X', 0xFF5FA8FFu);
+-    draw_text(s_panel, 140, 402, "SAVE", 0xFFE2E5EBu, 1);
+-    draw_snes_button(s_panel, 212, 398, 'B', 0xFFFF6B6Bu);
+-    draw_text(s_panel, 236, 402, "BACK", 0xFFE2E5EBu, 1);
+-    draw_text(s_panel, 316, 402, "UP DOWN SLOT", 0xFF7F8796u, 1);
++    /* Rock & Roll Racing port: an Xbox pad maps SNES buttons by position, so
++     * the menu's SNES A / X / B are the pad's B / Y / A; label them that way. */
++    draw_snes_button(s_panel, 20, 398, 'B', 0xFFFF6B6Bu);
++    draw_text(s_panel, 44, 402, "CARGAR", 0xFFE2E5EBu, 1);
++    draw_snes_button(s_panel, 116, 398, 'Y', 0xFFFFD24Du);
++    draw_text(s_panel, 140, 402, "GUARDAR", 0xFFE2E5EBu, 1);
++    draw_snes_button(s_panel, 212, 398, 'A', 0xFF6BE06Bu);
++    draw_text(s_panel, 236, 402, "VOLVER", 0xFFE2E5EBu, 1);
++    draw_text(s_panel, 316, 402, "ARRIBA/ABAJO RANURA", 0xFF7F8796u, 1);
+     if (s_mirror)
+         draw_text(s_panel, 20, 422, "NETPLAY: THE HOST CONTROLS THIS MENU", 0xFFB8BDC8u, 1);
+     else
+-        draw_text(s_panel, 20, 422, "KEYS: ARROWS SLOT  X LOAD  S SAVE  ESC BACK  Q QUICK",
++        draw_text(s_panel, 20, 422, "TECLADO: W/S RANURA  L CARGAR  I GUARDAR  ESC VOLVER",
+                   0xFFB8BDC8u, 1);
+     if (s_status[0])
+         draw_text(s_panel, 20, 436, s_status, 0xFFFFD24Du, 1);
+@@ -421,7 +425,7 @@ static void menu_submit(int save)
+         /* Every peer saves or loads in step; netplay reports the result. */
+         if (!snes_netplay_is_host() || !snes_netplay_menu_ready()) return;
+         if (!save && !slot_exists(s_selected)) {
+-            set_status("SLOT %02d IS EMPTY", s_selected);
++            set_status("RANURA %02d VACIA", s_selected);
+             return;
+         }
+         if (save ? snes_netplay_menu_save(s_selected) : snes_netplay_menu_load(s_selected))
+@@ -435,14 +439,14 @@ static void menu_submit(int save)
+     slot_path(s_selected, path, sizeof(path));
+     if (save) {
+         if (!write_slot(s_selected)) {
+-            set_local_status("SAVE FAILED: SLOT %02d", "QUICK SAVE FAILED");
++            set_local_status("ERROR AL GUARDAR: RANURA %02d", "ERROR AL GUARDAR LA RAPIDA");
+             return;
+         }
+         /* Deliberately stays open after a save, where psxrecomp closes.
+          * The freshly written thumbnail appearing in the row is the only
+          * direct evidence a player gets that the state was actually
+          * written, and this port had no save-state UI at all before now. */
+-        set_local_status("SAVED SLOT %02d", "QUICK STATE SAVED");
++        set_local_status("GUARDADO EN RANURA %02d", "GUARDADO RAPIDO HECHO");
+         /* Also a host toast: the in-menu status above is only visible while
+          * the menu is, and a player who saves and immediately closes would
+          * otherwise get no confirmation that anything was written. */
+@@ -451,13 +455,13 @@ static void menu_submit(int save)
+         return;
+     }
+     if (!slot_exists(s_selected)) {
+-        set_local_status("SLOT %02d IS EMPTY", "QUICK SLOT IS EMPTY");
++        set_local_status("RANURA %02d VACIA", "RANURA RAPIDA VACIA");
+         if (s_selected == SNES_SAVESTATE_QUICK_SLOT) snes_osd_push("Quick slot is empty", 0);
+         else snes_osd_push_slot_empty(s_selected);
+         return;
+     }
+     if (!RtlLoadSnapshot(path)) {
+-        set_local_status("LOAD FAILED: SLOT %02d", "QUICK LOAD FAILED");
++        set_local_status("ERROR AL CARGAR: RANURA %02d", "ERROR AL CARGAR LA RAPIDA");
+         return;
+     }
+     /* A load CLOSES the menu, so set_status() here would draw one frame of a
+@@ -552,6 +556,16 @@ uint32_t snes_savestate_menu_filter_guest_input(uint32_t inputs)
      return inputs & ~s_input_guard;
  }
  

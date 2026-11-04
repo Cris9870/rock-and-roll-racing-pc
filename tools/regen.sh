@@ -38,7 +38,7 @@ done
 IDENTITY_FILE="rom_identity.txt"
 CFG_DIR="recomp"
 OUT_DIR="src/gen"
-ROM_NAME="Rock N' Roll Racing (U).smc"
+ROM_NAME="Rock'N Roll Racing.smc"
 
 bash "$ROOT/tools/apply_patches.sh"
 SNESRECOMP_ROOT="${SNESRECOMP_ROOT:-snesrecomp}"
@@ -96,18 +96,27 @@ fi
 
 PATCHED="$(mktemp --suffix=.sfc)"
 PROFILE_TMP="$(mktemp --suffix=.json)"
-trap 'rm -f "$PATCHED" "$PROFILE_TMP"' EXIT
-"$PYTHON" "$ROOT/tools/gen_fps30_patch.py" --roms "$ROM" "${RNRR_FPS30_REF:-$ROOT/roms/ROCK30.smc}" --apply "$ROM" "$PATCHED"
-"$PYTHON" "$ROOT/tools/patch_rom.py" "$PATCHED" "$PATCHED"
+trap 'rm -f "$PATCHED" "$PROFILE_TMP" "${PROFILE_TMPS[@]}"' EXIT
+# European revision: no 30 FPS diff exists for it, so only the sprite patch.
+"$PYTHON" "$ROOT/tools/patch_rom.py" "$ROM" "$PATCHED"
 
 EMIT_ARGS=(--rom "$PATCHED" --cfg-dir "$CFG_DIR" --out-dir "$OUT_DIR" --cfg-roots --no-host-root-scan)
-if [ -f "$CFG_DIR/tier2_coverage.json" ]; then
-  "$PYTHON" "$ROOT/tools/rebind_profile.py" "$CFG_DIR/tier2_coverage.json" "$PROFILE_TMP" "$PATCHED"
-  EMIT_ARGS+=(--historical-profile-manifest "$PROFILE_TMP")
-fi
+# Coverage captured on this revision lives in recomp/coverage/*.json (the
+# USA tier2_coverage.json does not apply here). Each checkpoint is rebound to
+# the patched image and passed as a historical profile.
+PROFILE_TMPS=()
+for prof in "$CFG_DIR"/coverage/*.json; do
+  [ -f "$prof" ] || continue
+  tmp="$(mktemp --suffix=.json)"
+  PROFILE_TMPS+=("$tmp")
+  "$PYTHON" "$ROOT/tools/rebind_profile.py" "$prof" "$tmp" "$PATCHED"
+  EMIT_ARGS+=(--historical-profile-manifest "$tmp")
+done
 
 echo "== Generating $OUT_DIR =="
 . "$ROOT/tools/buildflags.sh"
+# The release RUSTFLAGS are ELF/Linux-only (no unwind tables, lld ELF switches).
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) unset RUSTFLAGS ;; esac
 "$PYTHON" "$SNESRECOMP_ROOT/tools/build_native_analyzer.py" >/dev/null
 "$PYTHON" "$SNESRECOMP_ROOT/tools/v2_emit.py" "${EMIT_ARGS[@]}"
 "$PYTHON" "$ROOT/tools/apply_overrides.py" --gen-dir "$OUT_DIR"

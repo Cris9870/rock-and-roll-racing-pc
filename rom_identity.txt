@@ -10,17 +10,18 @@
 # handed — it will say so rather than accept it.
 
 display_name    = Rock N' Roll Racing
-rom_file        = Rock N' Roll Racing (U).smc
-# Digests of the dump as stored: this is the headered (512-byte SMC copier
-# header) "Rock N' Roll Racing (U).smc" file, hashed whole. The build verifies
-# the whole file, so a bare image is refused.
-expected_crc32  = 3cf0de1f
-expected_md5    = c2f8eac8dcd5568431544293e91b6870
-expected_sha1   = 5427fb67f6e25283952e8d440d098343001ab7d4
-expected_sha256 = 04cac1e7fed7c811fe12cde2a1ec2ac6bb9c3453e099fddcd914f2e6d76a1f50
-rom_size        = 1049088
+rom_file        = Rock'N Roll Racing.smc
+# Digests of the dump as stored: this port targets the unheadered
+# "Rock & Roll Racing" (European logo, blank internal header) 1 MiB image.
+# The upstream project targets the USA dump; this revision's bank-0 code sits
+# $A0 bytes later and its sprite-attribute WRAM is $26 bytes lower.
+expected_crc32  = 412dd4bf
+expected_md5    = 3040be074cb8e05c4a4d3d7320372488
+expected_sha1   = 0d993c375623672f964ae2fba29e11f17c05b118
+expected_sha256 = 94d761a7339804271bf77d541f46a1d211918336ce741b561bfc3ddcaca98ec7
+rom_size        = 1048576
 mapping         = lorom
-region          = USA
+region          = Europe
 # What a mod package's [[target]] game_id must name to apply to this title
 # (snesrecomp/docs/MOD_PACKAGES.md). Stable across revisions on purpose.
-game_id         = rocknrollracing-usa
+game_id         = rocknrollracing

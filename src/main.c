@@ -28,11 +28,13 @@
 #include "host_main.h"
 #include "game_rtl.h"
 #include "rnrr_display.h"
-#include "rnrr_msu.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "rnrr_rompatch.h"
+#include "rnrr_launcher.h"
+#include "rnrr_revision.h"
+#include "host_paths.h"
 #include "sha256.h"
 #include "snesrecomp_rom_identity.h"
 #include "cpu_state.h"
@@ -48,28 +50,47 @@ static int hex_nibble(char c)
 
 static void rnrr_on_rom_loaded(const uint8_t *rom, size_t size)
 {
-    uint8_t got[32], want[32];
-    sha256_compute(rom, size, got);
-    const char *hex = SNESRECOMP_ROM_EXPECTED_SHA256;
-    for (int i = 0; i < 32; i++) {
-        int hi = hex_nibble(hex[i * 2]), lo = hex_nibble(hex[i * 2 + 1]);
-        want[i] = (uint8_t)((hi << 4) | lo);
-    }
-    if (strlen(hex) != 64 || memcmp(got, want, 32) != 0) {
-        fprintf(stderr, "[rnrr] this build accepts only the %s dump (SHA-256 %s); refusing this file\n",
-                SNESRECOMP_ROM_FILE, hex);
+    char sha[65];
+    RnrrRevision rev = RnrrIdentifyRom(rom, size, sha);
+    if (rev == RNRR_REV_UNKNOWN) {
+        fprintf(stderr, "[rnrr] unsupported ROM (SHA-256 %s): this port accepts Rock & Roll Racing "
+                        "(Europe) and Rock n' Roll Racing (USA)\n", sha);
         exit(1);
     }
+    fprintf(stderr, "[rnrr] ROM: %s%s\n", RnrrRevisionName(rev),
+            RnrrRevisionVerified(rev) ? "" : " (unverified revision)");
     if (size % 1024 == 512) { rom += 512; size -= 512; }
-    if (RnrrModsFps30Enabled() && RnrrRomPatchApplyFps30((uint8_t *)rom, size)) {
-        fprintf(stderr, "[rnrr] 30 FPS patch applied in memory\n");
+    int native = 0;
+#if defined(SNESRECOMP_HAS_GENERATED_CODE)
+    /* src/gen is generated from the European image (plus the sprite patch
+     * below), so only that revision can run it. engine.cfg ("interpreter",
+     * written by the launcher) or RNRR_INTERPRETER=1 selects the interpreter;
+     * RNRR_NATIVE=1 forces native. Public builds carry no generated code. */
+    if (rev == RNRR_REV_EUROPE) {
+        native = 1;
+        char path[1024];
+        if (snesrecomp_exe_dir_path("engine.cfg", path, sizeof(path))) {
+            FILE *f = fopen(path, "r");
+            if (f) {
+                char word[32] = {0};
+                if (fscanf(f, "%31s", word) == 1 && strcmp(word, "interpreter") == 0) native = 0;
+                fclose(f);
+            }
+        }
+        const char *e = getenv("RNRR_INTERPRETER");
+        if (e && *e) native = atoi(e) == 0;
+        e = getenv("RNRR_NATIVE");
+        if (e && *e) native = atoi(e) != 0;
+    }
+#endif
+    if (native) {
+        fprintf(stderr, "[rnrr] running recompiled code\n");
     } else {
         cpu_select_interpreted_program();
         interp_bridge_set_scheduler_aot_policy(0);
-        fprintf(stderr, "[rnrr] stock 20 FPS game; running through the interpreter\n");
+        fprintf(stderr, "[rnrr] running through the interpreter\n");
     }
     RnrrRomPatchApply((uint8_t *)rom, size);
-    RnrrMsuOnRomLoaded(rom, size);
 }
 
 static const char kRnrrDefaultConfigIni[] =
@@ -88,7 +109,7 @@ static const char kRnrrDefaultConfigIni[] =
   "WindowSize = Auto\n"
   "\n"
   "# Fullscreen mode (0=windowed, 1=desktop fullscreen, 2=fullscreen w/mode change)\n"
-  "Fullscreen = 0\n"
+  "Fullscreen = 1\n"
   "\n"
   "# Window scale (1=100%, 2=200%, 3=300%, etc.)\n"
   "WindowScale = 3\n"
@@ -107,7 +128,7 @@ static const char kRnrrDefaultConfigIni[] =
   "Renderer = opengl\n"
   "LinearFiltering = 0\n"
   "FrameBlend = 0\n"
-  "Shader = assets/shaders/ntsc-svideo.glslp\n"
+  "Shader = assets/shaders/rnrr-suavizada.glslp\n"
   "VSync = 1\n"
   "\n"
   "[Sound]\n"
@@ -174,7 +195,8 @@ static const char kRnrrDefaultConfigIni[] =
 #define SNES_GAME_VERSION "dev"
 #endif
 
-static const SnesDesktopHostGame kGameHost = {
+/* Not const: main() points the ROM identity at the dump being started. */
+static SnesDesktopHostGame kGameHost = {
     .display_name        = "Rock N' Roll Racing",
     .window_title        = "Rock N' Roll Racing",
     .launcher_title      = "Rock N' Roll Racing - Launcher",
@@ -189,11 +211,11 @@ static const SnesDesktopHostGame kGameHost = {
     .sram_path           = NULL,
     .native_widescreen   = 1,
     .state_menu_hotkeys  = 1,
-    .state_menu_no_pad_chord = 1,
+    .state_menu_no_pad_chord = 0,   /* Select+R (View+RB) opens save states */
     .display_aspect_supported = 1,
     .shader_supported    = 1,
     .rewind_settings     = 1,
-    .in_game_launcher    = 1,
+    .in_game_launcher    = 0,   /* the compact launcher runs before boot */
     .rom_digest_whole_file = 1,
     .default_config_ini  = kRnrrDefaultConfigIni,
     .on_rom_loaded       = rnrr_on_rom_loaded,
@@ -209,7 +231,68 @@ static const SnesDesktopHostGame kGameHost = {
 #ifndef __ANDROID__
 #undef main   /* desktop: keep plain main() even if SDL_main.h remapped it */
 #endif
+int RnrrShaderTest(const char *spec);
+
+/* The host verifies the ROM and keys the mod catalog on the SHA-256 it is
+ * given. This port accepts more than one revision, so that identity is the
+ * digest of the dump actually being started (header-less; the launcher stores
+ * a header-less copy). */
+static char s_rom_sha[65], s_rom_crc[9];
+static void rnrr_set_identity(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) return;
+    fseek(f, 0, SEEK_END);
+    long n = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (n <= 0 || n > 8 * 1024 * 1024) { fclose(f); return; }
+    uint8_t *buf = malloc((size_t)n);
+    if (buf && fread(buf, 1, (size_t)n, f) == (size_t)n &&
+        RnrrIdentifyRom(buf, (size_t)n, s_rom_sha) != RNRR_REV_UNKNOWN) {
+        RnrrRomCrc32(buf, (size_t)n, s_rom_crc);
+        kGameHost.expected_sha256_hex = s_rom_sha;
+        kGameHost.expected_crc32_hex = s_rom_crc;
+    }
+    free(buf);
+    fclose(f);
+}
+
+static int has_rom_ext(const char *s)
+{
+    size_t n = strlen(s);
+    return n > 4 && (!_stricmp(s + n - 4, ".sfc") || !_stricmp(s + n - 4, ".smc"));
+}
+
 int main(int argc, char **argv)
 {
+    /* Every SDL window (launcher and game) takes the exe's icon resource. */
+    SDL_SetHint(SDL_HINT_WINDOWS_INTRESOURCE_ICON, "1");
+    SDL_SetHint(SDL_HINT_WINDOWS_INTRESOURCE_ICON_SMALL, "1");
+    {
+        const char *shader_test = getenv("RNRR_SHADER_TEST");
+        if (shader_test && *shader_test) return RnrrShaderTest(shader_test);
+    }
+    /* Plain double-click: show the compact launcher, then boot straight into
+     * the game. Any command-line argument keeps the framework's behaviour. */
+    if (argc == 1) {
+        static char rom[1024];
+        static char *args[7];
+        int r = RnrrLauncherRun(kRnrrDefaultConfigIni, SNESRECOMP_ROM_EXPECTED_SHA256, rom, sizeof(rom));
+        if (r == 0) return 0;
+        args[0] = argv[0];
+        rnrr_set_identity(rom);
+        args[1] = (char *)"--no-launcher";
+        args[2] = rom;
+        /* Test hook: drive the game headless after an automated launch. */
+        const char *test_script = getenv("RNRR_LAUNCHER_TEST_SCRIPT");
+        if (test_script && *test_script) {
+            args[3] = (char *)"--script";
+            args[4] = (char *)test_script;
+            return snesrecomp_desktop_main(&kGameHost, 5, args);
+        }
+        return snesrecomp_desktop_main(&kGameHost, 3, args);
+    }
+    for (int i = 1; i < argc; i++)
+        if (has_rom_ext(argv[i])) rnrr_set_identity(argv[i]);
     return snesrecomp_desktop_main(&kGameHost, argc, argv);
 }

@@ -1,4 +1,4 @@
-Local changes to the two submodules, as `git diff` output against the pinned
+Local changes to the snesrecomp submodule, as `git diff` output against the pinned
 commits. CMake configure and `tools/regen.sh` apply them automatically
 (`tools/apply_patches.sh`; already-applied patches are skipped). After moving
 a submodule pin, regenerate the file with `git -C <submodule> diff`.
@@ -26,5 +26,11 @@ snesrecomp.patch
   until it is silent or keyed on again; the RNRR driver loads the next sound's
   pitch during the release and the explosion tail turned into a noise burst.
 
-recomp-ui.patch
-- `digest_whole_file` on the launcher game info: hash the picked ROM whole.
+- recompiler/v2/codegen.py: compiled reads with direct, absolute or long
+  addressing first put the operand's last byte on the open bus, as the CPU's
+  own operand fetch would. Compiled code fetched no instruction bytes, so an
+  unmapped read returned a stale value; RNRR's hero select reads $5C00 with
+  DB=$80 and uses the open-bus $5C5C as a VRAM address (2P screen corrupted).
+- snes_savestate_menu.c: labels in Spanish and in Xbox terms (an Xbox pad maps
+  SNES buttons by position: the menu's SNES A/X/B are the pad's B/Y/A), and
+  the keyboard hint matches this port's WASD + JIKL layout.

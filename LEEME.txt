@@ -1,0 +1,76 @@
+ROCK & ROLL RACING - PC (panorámico, Windows)
+=============================================
+
+Necesitas tu propia copia del juego (ROM de Super Nintendo, archivo .sfc o .smc).
+Este programa no incluye el juego.
+
+Cómo empezar
+------------
+1. Descomprime esta carpeta en un sitio normal (Escritorio, Documentos...).
+   Evita "Archivos de programa": el juego guarda ahí sus ajustes y partidas.
+2. Abre RockNRollRacingSNESRecomp.exe.
+3. Pulsa "Elegir archivo..." o arrastra tu ROM a la ventana.
+   - Se aceptan la versión europea ("Rock & Roll Racing") y la de EE. UU.
+     ("Rock n' Roll Racing"). La de EE. UU. aún no está verificada.
+   - Se guarda una copia en la carpeta rom\ y, solo la primera vez, el lanzador
+     prepara su aspecto a partir de ella (unos segundos).
+4. Pulsa JUGAR (Enter, o Start / A en el mando).
+
+La carpeta es portátil: puedes moverla o copiarla a otro PC y sigue funcionando.
+Si usas mando, conéctalo antes de abrir el juego.
+
+El lanzador
+-----------
+Debajo de cada opción se explica qué hace. Los ajustes se guardan al pulsar JUGAR.
+
+  IMAGEN
+  - Formato ...... 4:3, 16:9, 21:9 o Ajustar (se adapta a tu monitor, máx. 21:9).
+                   Solo las carreras se ensanchan; los menús quedan en 4:3.
+  - Pantalla ..... completa o ventana (Alt+Enter alterna durante el juego).
+  - Filtro ....... Suavizada (sin dientes de sierra), Nítida, CRT o TV clásica.
+  RENDIMIENTO
+  - Movimiento ... Suave: el juego genera unas 20 imágenes por segundo en carrera;
+                   se interpolan hasta la frecuencia de tu monitor. No cambia la
+                   velocidad del juego. Original: sin interpolar.
+  SONIDO
+  - Volumen ...... 0 = sin sonido.
+
+Controles
+---------
+                      Mando (Xbox)            Teclado
+  Dirección           Cruceta                 W A S D
+  SNES B · A          A · B                   K · L
+  SNES Y · X          X · Y                   J · I
+  L · R               LB · RB                 Q · O
+  Start · Select      Start · Select (View)   Enter · Mayús derecha
+
+  Jugador 2 con teclado: flechas, teclado numérico 4 8 6 2 (Y X A B),
+  7 y 9 (L R), Intro numérico (Start), 0 numérico (Select).
+
+Partidas guardadas
+------------------
+                      Mando (Xbox)            Teclado
+  Menú de partidas    Select (View) + RB      F11
+  Rebobinar           Select (View) + R3      F12
+  Carga rápida        (en el menú)            F1 ... F10
+  Guardado rápido     (en el menú)            Mayús + F1 ... F10
+
+  En el menú de partidas: arriba/abajo elige ranura; con el mando, B carga,
+  Y guarda y A vuelve. El juego queda en pausa mientras el menú está abierto.
+
+Otros atajos de teclado
+-----------------------
+  Alt+Enter pantalla completa · Tab turbo · P pausa · Ctrl+R reiniciar
+
+Problemas frecuentes
+--------------------
+- "Ese archivo no es Rock & Roll Racing": tu ROM es otra versión o está dañada.
+- Windows avisa al abrir el .exe (SmartScreen): pulsa "Más información" y
+  "Ejecutar de todas formas". El programa no está firmado digitalmente.
+
+Licencias
+---------
+Código bajo PolyForm Noncommercial 1.0.0 (LICENSE): uso no comercial.
+Terceros en licenses\. Rock n' Roll Racing es © Blizzard Entertainment; este
+proyecto no está afiliado a sus titulares.
+Proyecto: https://github.com/Cris9870/rock-and-roll-racing-pc

@@ -1,0 +1,6 @@
+/* Application icon: Explorer, shortcuts, taskbar and window title bars
+ * (SDL picks resource 1 through SDL_HINT_WINDOWS_INTRESOURCE_ICON). */
+1 ICON "../assets/icon/rnrr.ico"
+
+/* Manifest: UTF-8 code page (paths with accents), Windows 10+. */
+1 24 "rnrr.manifest"

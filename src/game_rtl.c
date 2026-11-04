@@ -36,11 +36,16 @@
 
 #include "beam_frame_driver.h"
 #include "rnrr_display.h"
-#include "rnrr_msu.h"
 
 void GameInitialize(void)
 {
-    RnrrMsuSelectSaveRoot();
+}
+
+/* Save-state identity. It was "rnrr-stock" (vs "rnrr-msu1") when the USA
+ * port's MSU-1 option existed; keeping the string keeps old saves loadable. */
+static const char *RnrrSnapshotIdentity(void)
+{
+    return "rnrr-stock";
 }
 
 void GameRunOneFrame(void)
@@ -69,5 +74,5 @@ const RtlGameInfo kGameInfo = {
     .draw_ppu_frame = &GameDrawPpuFrame,
     .save_name_prefix = "save",
     .session_reset = &GameSessionReset,
-    .snapshot_guard_identity = &RnrrMsuSnapshotIdentity,
+    .snapshot_guard_identity = &RnrrSnapshotIdentity,
 };

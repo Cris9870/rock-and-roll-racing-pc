@@ -63,6 +63,37 @@ def patch_overclock(path: pathlib.Path) -> int:
     return n
 
 
+PARK_BLOCKS = ("0x00D41B", "0x00D480", "0x01FF24", "0x01FF53", "0x00D642", "0x009A2F")
+PARK_RE = re.compile(r"^(\s*)(uint8|uint16) (_v\d+) = 0x80;$")
+
+
+def patch_park(path: pathlib.Path) -> int:
+    """Hidden sprites are parked at X=$180; the host moves that X to the
+    right cull bound in widescreen (g_rnrr_park_x). Every compiled copy of
+    the parking blocks reads it instead of the constant."""
+    lines = path.read_text().split("\n")
+    n = 0
+    for i, line in enumerate(lines):
+        m = re.search(r"cpu_trace_block\(cpu, (0x[0-9A-F]{6})\);", line)
+        if not m or m.group(1) not in PARK_BLOCKS:
+            continue
+        for j in range(i + 1, min(i + 60, len(lines))):
+            if "cpu_trace_block(cpu, " in lines[j]:
+                break
+            pm = PARK_RE.match(lines[j])
+            if pm:
+                cast = "(uint8)" if pm.group(2) == "uint8" else ""
+                lines[j] = f"{pm.group(1)}{pm.group(2)} {pm.group(3)} = {cast}g_rnrr_park_x;"
+                n += 1
+                break
+    if n:
+        text = "\n".join(lines)
+        if INCLUDE not in text:
+            text = text.replace('#include "cpu_trace.h"\n', '#include "cpu_trace.h"\n' + INCLUDE, 1)
+        path.write_text(text)
+    return n
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--gen-dir", required=True)
@@ -71,6 +102,10 @@ def main() -> int:
     for path in sorted(pathlib.Path(args.gen_dir).glob("bank01*.c")):
         total += patch(path)
     print(f"apply_overrides: widened {total} sprite cull site(s)")
+    park = 0
+    for path in sorted(pathlib.Path(args.gen_dir).glob("*.c")):
+        park += patch_park(path)
+    print(f"apply_overrides: parked-sprite X site(s): {park}")
     oc = 0
     for path in sorted(pathlib.Path(args.gen_dir).glob("*.c")):
         oc += patch_overclock(path)

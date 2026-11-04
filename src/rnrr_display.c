@@ -14,6 +14,7 @@
 #include "snes/dma.h"
 #include "snes/cart.h"
 #include "rnrr_ws_cull.h"
+#include "rnrr_rompatch.h"
 #include "desktop/config.h"
 #include "desktop/display_aspect.h"
 #include "desktop/host_clock.h"
@@ -31,6 +32,7 @@ enum {
 
 volatile uint16_t g_rnrr_cull_left = 0xffc0;
 volatile uint16_t g_rnrr_cull_right = 0x100;
+volatile uint16_t g_rnrr_park_x = 0x80;
 volatile uint8_t g_rnrr_oc_fast = 6;
 volatile uint8_t g_rnrr_oc_slow = 8;
 static unsigned s_overclock = 100;
@@ -70,7 +72,29 @@ static void apply_cull_window(int extra)
     uint16_t left = (uint16_t)(0xffc0 - extra), right = (uint16_t)(0x100 + extra);
     g_rnrr_cull_left = left;
     g_rnrr_cull_right = right;
+    /* Hidden sprites are parked at X=$180 (9-bit), which hardware shows at
+     * x=-128: off a 256-pixel screen, but inside a wide left margin, where
+     * a parked car's parts (+8 px) showed as ghost cars at 21:9. Park them at
+     * the right cull bound instead: it decodes to -(256 - extra), past the
+     * left margin by more than a sprite plus its part offsets. */
+    g_rnrr_park_x = extra > 0 ? right : 0x80;
     if (!g_snes || !g_snes->cart) return;
+    {
+        const RnrrParkSite *park;
+        int n = RnrrRomPatchParkSites(&park);
+        for (int i = 0; i < n; i++) {
+            uint8_t *p = cart_getRomPtr(g_snes->cart, (uint8_t)(park[i].addr >> 16), (uint16_t)park[i].addr);
+            if (!p) continue;
+            if (park[i].wide) {
+                uint16_t cur = (uint16_t)(p[0] | (p[1] << 8));
+                if (cur != 0x80 && (cur < 0x100 || cur >= 0x200)) continue;
+                p[0] = (uint8_t)g_rnrr_park_x;
+                p[1] = (uint8_t)(g_rnrr_park_x >> 8);
+            } else {
+                p[0] = (uint8_t)g_rnrr_park_x;
+            }
+        }
+    }
     for (size_t i = 0; i < sizeof(sites) / sizeof(sites[0]); i++) {
         uint8_t *p = cart_getRomPtr(g_snes->cart, 0x01, sites[i][0]);
         if (!p) continue;
@@ -575,7 +599,11 @@ static void cache_serve(int extra)
                     uint32_t tx = (uint32_t)((int)tx0 + c);
                     uint16_t e;
                     uint16_t adr = tilemap_word(g->sc[l], tx, row);
-                    if (map_tile(l, tx, ty0 + r, &e) || store_get(st, tx, ty0 + r, &e)) {
+                    /* The map is in BG space; a view whose scroll is offset
+                     * from its camera (the lower half of split screen) reads
+                     * its map rows shifted by that offset (a multiple of 8). */
+                    uint32_t map_ty = (uint32_t)((int)(ty0 + r) + (g->off_y[l] >> 3));
+                    if (map_tile(l, tx, map_ty, &e) || store_get(st, tx, ty0 + r, &e)) {
                         vram[adr] = e;
                         s_stat_served++;
                         continue;
@@ -621,11 +649,11 @@ void RnrrPrepareFrame(int drawable_w, int drawable_h, int *frame_w, int *frame_h
         width = 256 + 2 * override;
     } else if (s_ws_mode != RNRR_WS_OFF) {
         SnesDisplayFrame frame = SnesDisplayAspect_ComputeAdaptiveFrame(
-            256, 224, RNRR_MAX_FRAME_WIDTH, target_aspect(drawable_w, drawable_h),
+            256, 224, RNRR_SAFE_FRAME_WIDTH, target_aspect(drawable_w, drawable_h),
             SnesDisplayAspect_Clamp(g_config.display_aspect));
         width = frame.width;
     }
-    if (width > RNRR_MAX_FRAME_WIDTH) width = RNRR_MAX_FRAME_WIDTH;
+    if (width > RNRR_SAFE_FRAME_WIDTH) width = RNRR_SAFE_FRAME_WIDTH;
     if (width < 256) width = 256;
     width -= (width - 256) & 1;
     s_frame_w = width;

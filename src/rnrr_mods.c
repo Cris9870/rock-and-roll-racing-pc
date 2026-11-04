@@ -48,21 +48,6 @@ static void enable_widescreen(void)
     if (getenv("RNRR_DEBUG")) fprintf(stderr, "[rnrr] widescreen plugin: aspect=%s mode=%d\n", value, mode);
 }
 
-static void enable_msu1(void)
-{
-}
-
-static void enable_fps30(void)
-{
-}
-
-int RnrrModsFps30Enabled(void)
-{
-    const char *env = getenv("RNRR_FPS30");
-    if (env && *env) return atoi(env) != 0;
-    return snes_mod_runtime_feature_enabled_c(kPackage, "fps30") > 0;
-}
-
 static void enable_overclock(void)
 {
     char value[32];
@@ -70,7 +55,7 @@ static void enable_overclock(void)
     if (getenv("RNRR_OVERCLOCK")) return;
     if (option("overclock", "percent", value, sizeof(value)) && strcmp(value, "auto"))
         pct = (unsigned)strtoul(value, NULL, 10);
-    if (!pct) pct = RnrrModsFps30Enabled() ? 150 : 100;
+    if (!pct) pct = 100;
     RnrrSetOverclock(pct);
     if (getenv("RNRR_DEBUG")) fprintf(stderr, "[rnrr] overclock plugin: %u%%\n", pct);
 }
@@ -90,6 +75,4 @@ SNES_MOD_CONSTRUCTOR(register_rnrr_mods)
     snes_mod_register_presentation_plugin("rnrr.widescreen", enable_widescreen);
     snes_mod_register_presentation_plugin("rnrr.presentation-fps", enable_presentation_fps);
     snes_mod_register_presentation_plugin("rnrr.overclock", enable_overclock);
-    snes_mod_register_activation_plugin("rnrr.msu1", enable_msu1);
-    snes_mod_register_activation_plugin("rnrr.fps30", enable_fps30);
 }

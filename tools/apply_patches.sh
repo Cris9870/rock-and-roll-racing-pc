@@ -3,7 +3,7 @@
 # an already-applied patch is skipped; one that applies neither way fails.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-for sub in snesrecomp recomp-ui; do
+for sub in snesrecomp; do
   patch="$ROOT/patches/$sub.patch"
   [ -s "$patch" ] || continue
   dir="$ROOT/$sub"

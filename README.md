@@ -1,127 +1,99 @@
-# Rock N' Roll Racing Recomp
+# Rock & Roll Racing — PC (panorámico, Windows)
 
-A native recompilation of **Rock N' Roll Racing** (USA), built on
-[snesrecomp](https://github.com/RetroPortingToolKit/snesrecomp).
+Port nativo para Windows de **Rock & Roll Racing** / **Rock n' Roll Racing** (SNES, 1993), con
+pantalla panorámica real hasta 21:9, filtros de imagen sin dientes de sierra, mando y teclado.
+Basado en la recompilación estática [snesrecomp](https://github.com/mstan/snesrecomp) y en el port
+[fulalas/RockNRollRacingSNESRecomp](https://github.com/fulalas/RockNRollRacingSNESRecomp).
 
-Rock N' Roll Racing for SNES, recompiled to a native PC build.
+> **Necesitas tu propia copia del juego.** Este proyecto no incluye el juego ni nada sacado de él:
+> ni la ROM, ni gráficos, ni código traducido. Cada jugador aporta su ROM y el programa trabaja
+> con ella en su propio equipo.
 
-> **You must legally own a copy of the game.** No ROM data is distributed with
-> this project, in the repository or in any release. The recompiled C is
-> generated locally from your own copy and is never committed.
+*English summary below.*
 
-## Status
+## Jugar (sin conocimientos técnicos)
 
-Fully working.
+1. Descarga el `.zip` de la última versión en **[Releases](../../releases)** y descomprímelo en una
+   carpeta normal (Escritorio o Documentos; evita "Archivos de programa").
+2. Abre `RockNRollRacingSNESRecomp.exe`.
+3. Pulsa **Elegir archivo…** (o arrastra tu ROM a la ventana) y luego **JUGAR**.
 
-<img width="3840" height="2160" alt="image" src="https://github.com/user-attachments/assets/e10f9857-418b-4636-8cf7-73f97bc9c6f1" />
+La primera vez el lanzador guarda una copia de tu ROM en la carpeta `rom\` y prepara su aspecto a
+partir de ella (unos segundos). La carpeta es portátil: puedes moverla o copiarla a otro PC.
 
-<img width="3840" height="2160" alt="image" src="https://github.com/user-attachments/assets/ee8a64f2-cc3d-47cb-9531-a98ece8596ac" />
-
-<img width="3840" height="2160" alt="image" src="https://github.com/user-attachments/assets/ca1e0459-5ae7-4539-8b76-0112bc62733e" />
-
-## Features
-
-- Save states with a 12-slot browser and thumbnails (**F7** or Select + R),
-  quick slots F1-F10, rewind filmstrip (**F8** or Select + R3). Rewind depth
-  and interval are set in the launcher.
-- Display shaders (CRT Soft, LCD Grid, Sharp, Warm Composite, or your own
-  `.glsl`/`.glslp` dropped into `assets/shaders/`) and the three SNES pixel
-  aspects (4:3, 8:7, 1:1).
-- **Widescreen** (Mods page): 16:9, 21:9, 32:9, or fit to window. Races render
-  wider; the HUD anchors to the screen edges; menus and the title stay 4:3.
-- **Motion interpolation** (Mods page, on by default): present at the display
-  refresh or a fixed 90-360 Hz, blending background scrolling and sprite
-  positions between the game's logic updates (every 2nd field with the 30 FPS
-  feature, every 3rd without). Costs 1 frame of display delay. The F readout
-  shows a second line: game updates, presented frames, interpolated frames and
-  simulated fields per second.
-- **30 FPS game logic** (Mods page, on by default): the race logic runs at
-  30 updates per second instead of 20, with the original pacing. See "One ROM,
-  two speeds" below.
-- **CPU overclock** (Mods page, on by default): charges CPU instructions fewer
-  master clocks during races so the game's logic never overruns its frame
-  budget. Auto is 150% with the 30 FPS feature on, which otherwise drops to
-  about 26-28 updates per second in busy scenes, and 100% with it off. The
-  game's update rate is divider-driven, so a faster CPU does not change game
-  speed.
-- **MSU-1 music** (Mods page): point the feature at a folder holding a
-  Rock N' Roll Racing MSU-1 pack (`.pcm` tracks plus its `.ips` or `.bps`
-  patch). The patch is applied in memory, the stock ROM is never modified, and
-  the patched cartridge runs through the interpreter. MSU-1 save states live
-  in `saves/msu1/` and are not interchangeable with stock ones.
-- Gamepads through SDL, rebindable keys and hotkeys in the launcher, and the
-  in-game launcher (Ctrl+L or Select + L3).
-- **NTSC shaders**: `ntsc-composite`, `ntsc-svideo`, `ntsc-rgb`, and
-  `ntsc-monochrome` mimic Snes9x's Blargg NTSC filter. Hue, saturation,
-  contrast, brightness, sharpness, gamma, artifacts, fringing, bleed,
-  resolution, scanline intensity (12.5% default), and merge-fields are shader
-  parameters (`ntsc_*`), settable per preset in the `.glslp`.
-
-### Widescreen notes
-
-The game only streams track tiles a few pixels past the native 256-pixel
-view. The port keeps a world-keyed cache of every tile the native view has
-shown, so margins are exact for any area seen before (from the second lap
-on). On the first visit, the outermost part of the leading margin can show
-the tilemap's wrapped content until the game streams it. Cars are emitted by
-the game only within roughly 128 px of the native view, so at 32:9 they can
-pop in at the far margins.
-
-## ROM identity
-
-| | |
+| ROM | Estado |
 |---|---|
-| File | `Rock N' Roll Racing (U).smc` (1,049,088 bytes: the 512-byte SMC copier header is part of the identity) |
-| Publisher | Interplay |
-| Developer | — |
-| Year | 1993 |
-| Mapping | lorom |
-| Region | USA (North America) |
-| Coprocessor | none |
-| CRC32 | `3cf0de1f` |
-| SHA-256 | `04cac1e7fed7c811fe12cde2a1ec2ac6bb9c3453e099fddcd914f2e6d76a1f50` |
+| Rock & Roll Racing (Europa) | Probada de principio a fin |
+| Rock n' Roll Racing (USA) | Compatible, **sin verificar todavía**; si la pruebas, cuéntalo en *Issues* |
 
-`tools/regen.sh` refuses to run against anything else, so a mismatched
-revision fails immediately instead of producing subtly wrong output.
+Se aceptan archivos `.sfc` y `.smc`, con o sin cabecera de copiador.
 
-## Linux build
+## Qué incluye
 
-```sh
-git submodule update --init --recursive
-bash tools/regen.sh --rom "/path/to/Rock N' Roll Racing (U).smc"
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
-bash tools/build-linux.sh   # AppImage in release-linux/
-```
+- **Panorámico real** en carrera (16:9, 21:9 o ajustado al monitor): se ve más pista, no se estira la
+  imagen. Funciona también a pantalla partida. Los menús se muestran en 4:3.
+- **Filtros**: Suavizada (Scale2x + anti-aliasing: sin dientes de sierra), Nítida, CRT y TV clásica.
+- **Movimiento suave**: interpola las ~20 imágenes/s del juego hasta la frecuencia de tu monitor.
+- **Mando** (Xbox, PlayStation…) y **teclado** (WASD + J I K L, Q/O).
+- **Partidas guardadas** en cualquier momento y **rebobinado**.
+- Lanzador en español con el estilo del juego.
 
-## Windows build
+### Controles
 
-```sh
-git submodule update --init --recursive
-bash tools/regen.sh --rom "/c/path/to/Rock N' Roll Racing (U).smc"
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_C_COMPILER=x86_64-w64-mingw32-clang \
-  -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-clang++ \
-  -DSNESRECOMP_STATIC_RUNTIME=ON -DSNESRECOMP_FRAME_IMPL=LLE
-cmake --build build -j
-```
+| Función | Mando (Xbox) | Teclado |
+|---|---|---|
+| Dirección | Cruceta | W A S D |
+| Botones SNES B · A | A · B | K · L |
+| Botones SNES Y · X | X · Y | J · I |
+| L · R | LB · RB | Q · O |
+| Start · Select | Start · Select (View) | Enter · Mayús derecha |
+| Menú de partidas | Select (View) + RB | F11 |
+| Rebobinar | Select (View) + R3 | F12 |
+| Carga / guardado rápido | (en el menú) | F1–F10 / Mayús+F1–F10 |
 
-## Run
+## Compilar desde el código
+
+Requisitos (Windows): [llvm-mingw](https://github.com/mstorsjo/llvm-mingw), CMake, Ninja, Python 3 y
+Git Bash.
 
 ```sh
-./build/RockNRollRacingSNESRecomp                     # launcher picks the ROM
-./build/RockNRollRacingSNESRecomp "/path/to/Rock N' Roll Racing (U).smc"   # skip the launcher
+git clone --recursive https://github.com/Cris9870/rock-and-roll-racing-pc
+cd rock-and-roll-racing-pc
+cmake -S . -B build-public -G Ninja -DCMAKE_BUILD_TYPE=Release -DRNRR_PUBLIC_BUILD=ON \
+  -DCMAKE_C_COMPILER=x86_64-w64-mingw32-clang -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-clang++ \
+  -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres \
+  -DSNESRECOMP_STATIC_RUNTIME=ON -DSNESRECOMP_SDL_BACKEND=SDL3 -DSNESRECOMP_FRAME_IMPL=LLE
+cmake --build build-public --target RockNRollRacingSNESRecomp
+bash tools/package_public.sh build-public      # crea dist/*.zip
 ```
 
-With no ROM on the command line the build opens the recomp-ui launcher: a ROM
-picker with a verification badge, plus display / audio / input settings. Your
-choice is cached in `rom.cfg` beside the executable, so the next launch opens
-on it and "Skip launcher on boot" makes it immediate. If the launcher is not
-built in (`--no-recomp-ui`), the host falls back to a native file picker.
+`RNRR_PUBLIC_BUILD=ON` produce el ejecutable distribuible: no lleva nada derivado de una ROM y
+ejecuta el juego con el intérprete del framework.
 
-## License
+**Motor nativo (opcional, solo para uso propio).** Con la ROM europea puedes generar el código C
+recompilado (`bash tools/regen.sh --rom <tu ROM>`, necesita Rust 1.97.1 `gnullvm`) y compilar sin
+`RNRR_PUBLIC_BUILD`; el lanzador mostrará entonces la opción *Motor: Nativo*. Ese ejecutable contiene
+código traducido de tu ROM: **no lo distribuyas.**
 
-This project's own source is under the license in `LICENSE`. The framework
-carries its own terms — see `snesrecomp/LICENSE` and
-`snesrecomp/THIRD_PARTY_ATTRIBUTION.md`. Neither covers the game data, which
-is not distributed here.
+## Créditos y licencias
+
+- Port original: [fulalas/RockNRollRacingSNESRecomp](https://github.com/fulalas/RockNRollRacingSNESRecomp).
+- Framework: [snesrecomp](https://github.com/mstan/snesrecomp) de Matthew Stanley.
+- Este proyecto: adaptación a la revisión europea y USA, panorámico hasta 21:9, filtros, lanzador,
+  controles y empaquetado portátil.
+
+El código está bajo **PolyForm Noncommercial 1.0.0** (`LICENSE`): uso y redistribución permitidos
+sin fines comerciales. Terceros en `licenses/`: snesrecomp (PolyForm Noncommercial), SDL3 (zlib),
+Dear ImGui (MIT) y fuentes Lato (SIL OFL 1.1). *Rock n' Roll Racing* es © Blizzard Entertainment;
+este proyecto no está afiliado ni respaldado por sus titulares.
+
+---
+
+## English
+
+A native Windows port of **Rock n' Roll Racing** (SNES) with true widescreen up to 21:9, jaggy-free
+image filters, gamepad and keyboard support. **Bring your own ROM**: nothing from the game ships
+here. Download the zip from *Releases*, unzip it, run `RockNRollRacingSNESRecomp.exe`, pick (or
+drop) your ROM and press **JUGAR**. The European release is fully tested; the USA release is
+supported by signature but not yet verified — reports welcome. Non-commercial license
+(PolyForm Noncommercial 1.0.0).

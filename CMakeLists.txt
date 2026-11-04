@@ -27,11 +27,10 @@ endif()
 
 set(SNESRECOMP_ROOT "${CMAKE_SOURCE_DIR}/snesrecomp" CACHE PATH
     "Path to the snesrecomp checkout used by this game")
-# The submodules are pinned upstream checkouts; our changes to them live in
-# patches/ and are applied here, so every build path (CI, the launcher's
-# Generate & rebuild, a plain cmake) sees the same tree.
+# The snesrecomp submodule is a pinned upstream checkout; our changes to it
+# live in patches/ and are applied here, so every build sees the same tree.
 find_package(Git QUIET)
-foreach(_rnrr_sub snesrecomp recomp-ui)
+foreach(_rnrr_sub snesrecomp)
     set(_rnrr_patch "${CMAKE_CURRENT_SOURCE_DIR}/patches/${_rnrr_sub}.patch")
     set(_rnrr_dir "${CMAKE_CURRENT_SOURCE_DIR}/${_rnrr_sub}")
     if(NOT EXISTS "${_rnrr_patch}" OR NOT EXISTS "${_rnrr_dir}/.git")
@@ -73,9 +72,12 @@ add_executable(RockNRollRacingSNESRecomp
     src/game_rtl.c
     src/rnrr_display.c
     src/rnrr_mods.c
-    src/rnrr_msu.c
     src/rnrr_rompatch.c
     src/gen_stubs.c
+    src/rnrr_launcher.cpp
+    src/rnrr_revision.c
+    src/rnrr_art.cpp
+    src/rnrr_shader_test.c
 )
 
 # ROM identity. rom_identity.txt is the one place the digests live: the build
@@ -92,7 +94,18 @@ snesrecomp_rom_identity(RockNRollRacingSNESRecomp ${CMAKE_SOURCE_DIR}/rom_identi
 # That is what release zips contain; the player's machine produces the
 # playable binary from their own ROM. Without the option an empty src/gen/ is
 # still a hard error (the framework owns the message).
-snesrecomp_target_generated_code(RockNRollRacingSNESRecomp ${CMAKE_SOURCE_DIR}/src/gen)
+# RNRR_PUBLIC_BUILD: the distributable executable. It carries nothing derived
+# from a ROM -- no generated code (src/gen is ignored even if present) -- and
+# runs every revision through the interpreter. Without it, src/gen (made by
+# tools/regen.sh from the European dump) is compiled in for the native engine.
+option(RNRR_PUBLIC_BUILD "Interpreter-only build with no ROM-derived code" OFF)
+if(RNRR_PUBLIC_BUILD)
+    target_sources(RockNRollRacingSNESRecomp PRIVATE src/rnrr_no_native.c)
+    target_compile_definitions(RockNRollRacingSNESRecomp PRIVATE RNRR_PUBLIC_BUILD=1)
+    message(STATUS "RockNRollRacingSNESRecomp: PUBLIC build (interpreter only, no ROM-derived code)")
+else()
+    snesrecomp_target_generated_code(RockNRollRacingSNESRecomp ${CMAKE_SOURCE_DIR}/src/gen)
+endif()
 
 # The mod catalog. This names WHERE the packages are; the framework owns the
 # layout they are staged into beside the executable, and stages them on every
@@ -134,43 +147,40 @@ snesrecomp_target_sdl(RockNRollRacingSNESRecomp)
 # hooks; the host is the framework's and improves on a submodule pull.
 # Add TIER2 once this port reads the interpreter-gap manifest after each run.
 snesrecomp_target_desktop_host(RockNRollRacingSNESRecomp)
-snesrecomp_target_shader_presets(RockNRollRacingSNESRecomp)
+# Only this port's own image filters and the launcher's fonts are staged; the
+# framework's shared preset collection is not used.
 add_custom_command(TARGET RockNRollRacingSNESRecomp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets/shaders" "$<TARGET_FILE_DIR:RockNRollRacingSNESRecomp>/assets/shaders"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/assets/fonts" "$<TARGET_FILE_DIR:RockNRollRacingSNESRecomp>/assets/fonts"
     VERBATIM)
 # rom.cfg (the ROM the wizard set this project up from; git-ignored) is
 # staged beside the executable when none is there yet, so the first launch
 # opens on that dump rather than asking for one.
 snesrecomp_target_rom_cache(RockNRollRacingSNESRecomp)
 
-# Shared Dear ImGui pre-boot launcher (ROM picker, verification, display /
-# audio / input settings). Self-contained: it brings its own ImGui, GL link and
-# staged assets, and defines RECOMP_LAUNCHER so src/main.c compiles its GUI path.
-set(RECOMP_UI_ROOT "${CMAKE_SOURCE_DIR}/recomp-ui" CACHE PATH
-    "Root directory of the recomp-ui launcher repo" FORCE)
-if(NOT EXISTS "${RECOMP_UI_ROOT}/recomp_ui.cmake")
-    message(FATAL_ERROR
-        "recomp-ui missing at ${RECOMP_UI_ROOT}.\n"
-        "Run: git submodule update --init --recursive recomp-ui")
+# A windowed app: no console window behind the launcher or the game, with the
+# port's own icon (tools/make_icon.py draws assets/icon/rnrr.ico).
+if(WIN32)
+    target_link_options(RockNRollRacingSNESRecomp PRIVATE -mwindows)
+    enable_language(RC)
+    target_sources(RockNRollRacingSNESRecomp PRIVATE src/rnrr.rc)
+    set_source_files_properties(src/rnrr.rc PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/rnrr.manifest;${CMAKE_CURRENT_SOURCE_DIR}/assets/icon/rnrr.ico")
 endif()
-include(${RECOMP_UI_ROOT}/recomp_ui.cmake)
-# BOXART stages launcher_assets/img/boxart.tga beside the exe; the launcher
-# shows assets/img/boxart.tga by default. EXISTS-guarded in recomp_ui.cmake,
-# so this configures cleanly before any art is fetched.
-recomp_target_launcher_ui(RockNRollRacingSNESRecomp CONSOLE snes
-    BOXART "${CMAKE_SOURCE_DIR}/launcher_assets/img/boxart.tga")
-
-# Generate & rebuild from inside the launcher: pick ROM -> recompile locally
-# -> cmake --build -> relaunch. The implementation is the framework's; this
-# project contributes no configuration (snesrecomp_codegen_host_autowire in
-# src/main.c). recomp-ui/src is on the include path because the host speaks
-# RecompLauncherCGameInfo.
+# The launcher (src/rnrr_launcher.cpp) is built on Dear ImGui (MIT), vendored
+# in src/third_party/imgui with its SDL3 and OpenGL3 backends.
+set(RNRR_IMGUI "${CMAKE_SOURCE_DIR}/src/third_party/imgui")
 target_sources(RockNRollRacingSNESRecomp PRIVATE
-    ${SNESRECOMP_ROOT}/host/snesrecomp_codegen_host.c)
-target_include_directories(RockNRollRacingSNESRecomp PRIVATE
-    ${SNESRECOMP_ROOT}/host
-    ${RECOMP_UI_ROOT}/src)
+    ${RNRR_IMGUI}/imgui.cpp
+    ${RNRR_IMGUI}/imgui_draw.cpp
+    ${RNRR_IMGUI}/imgui_tables.cpp
+    ${RNRR_IMGUI}/imgui_widgets.cpp
+    ${RNRR_IMGUI}/backends/imgui_impl_sdl3.cpp
+    ${RNRR_IMGUI}/backends/imgui_impl_opengl3.cpp)
+target_include_directories(RockNRollRacingSNESRecomp PRIVATE ${RNRR_IMGUI} ${RNRR_IMGUI}/backends)
+find_package(OpenGL REQUIRED)
+target_link_libraries(RockNRollRacingSNESRecomp PRIVATE OpenGL::GL)
 
 # Netplay is not built into this target.
 # No multitap: two seats, one controller per port.
