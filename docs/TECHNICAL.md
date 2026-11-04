@@ -14,7 +14,7 @@ There are no unit tests. Verification is done by running the game headless and i
 #   SNESRECOMP_DUMP_DIR=dir -> each `dump` writes <tag>.fb.bmp (core 256 px field), .wram.bin, .vram.bin, .oam.bin
 #   --framedump dir + SNESRECOMP_FRAMEDUMP_PIXELS=1 SNESRECOMP_FRAMEDUMP_START/END=N
 #                           -> presented frames as frame_NNNNNN.bmp, at widescreen width (342 for 16:9, 448 for 21:9)
-#   RNRR_NATIVE=1 / RNRR_INTERPRETER=1 force an engine
+#   RNRR_NATIVE=1 / RNRR_INTERPRETER=1 force an engine; RNRR_NO_ROMPATCH=1 runs the game without this port's ROM patches
 # Launcher, hidden, to a screenshot (exe with no args):
 RNRR_LAUNCHER_SHOT=out.bmp ./RockNRollRacingSNESRecomp.exe
 #   RNRR_LAUNCHER_PICK=<rom> acts as a dropped file; RNRR_LAUNCHER_SHOT_WAIT_ART=1 waits for the art job
@@ -67,6 +67,14 @@ deleted. Save-state identity stays `"rnrr-stock"` (`src/game_rtl.c`) for compati
   wraps.
 - The margin backgrounds come from a tile cache plus `map_tile()`, which reads the track map from
   WRAM in BG space. Split-screen views offset from their camera must shift map rows by `off_y`.
+- Each detected view group maps to a camera (`view_for_scroll`): an exact scroll match may share a
+  camera (one view cut into bands), a partial (X-only) match may not. When both split-screen cameras
+  shared an X, the lower view took the upper camera, re-based its tile store, and the upper margin
+  showed stale tilemap columns for a few frames.
+- Split-screen sprites: the game DMAs the upper view's OAM (`$7E1704`) in vblank and the lower
+  view's (`$7E14E4`) at line 113 under forced blank. The engine's raster journal replays those OAM
+  snapshots per line (`patches/README.md`), and motion smoothing keeps one OAM segment per band
+  (`FrameRecord.seg`) so interpolated frames keep both views' sprites.
 - Menus are pillarboxed to 4:3.
 - The HUD is anchored to the screen edges with PPU elastic bands.
 - Correct geometry requires `DisplayAspect = 4:3`: 7:6 SNES pixels. The launcher always writes it.

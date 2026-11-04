@@ -121,10 +121,20 @@ typedef union {
     uint64_t align[PPU_SAVESTATE_REGS_SIZE / 8];
 } RegBlock;
 
+/* The OAM as each band of lines was drawn. Nearly always one segment; a
+ * split-screen race re-uploads OAM at its split, so the lower view's band has
+ * its own table. */
+enum { OAM_SEGS = 4 };
 typedef struct {
-    RegBlock regs[225];
+    unsigned line;
     uint16_t oam[0x100];
     uint8_t high_oam[0x20];
+} OamSeg;
+
+typedef struct {
+    RegBlock regs[225];
+    int nseg;
+    OamSeg seg[OAM_SEGS];
     unsigned number;
     int valid;
     int extra;
@@ -316,7 +326,13 @@ static int wrap_delta(int cur, int prev)
     return ((cur - prev + 512) & 1023) - 512;
 }
 
-static int view_for_scroll(uint16_t h, uint16_t v)
+/* `used` holds the views already given to groups above this one. An exact
+ * scroll match may share a camera (one view cut into bands); a partial match
+ * may not. When both split-screen cameras share an X, the lower view
+ * (its scroll offset from its camera, so only X matches) took the upper
+ * view's camera, re-based its tile store, and the upper margin went unserved
+ * for a few frames: stale tilemap columns showed as garbage. */
+static int view_for_scroll(uint16_t h, uint16_t v, unsigned used)
 {
     for (int i = 0; i < CACHE_VIEWS; i++)
         if ((s_cam[i][0] & 0x3ff) == h && (s_cam[i][1] & 0x3ff) == v) {
@@ -325,14 +341,14 @@ static int view_for_scroll(uint16_t h, uint16_t v)
             return i;
         }
     for (int i = 0; i < CACHE_VIEWS; i++)
-        if ((s_cam[i][0] & 0x3ff) == h) {
+        if (!(used & (1u << i)) && (s_cam[i][0] & 0x3ff) == h) {
             s_track[i].valid = 1; s_track[i].h = h; s_track[i].v = v;
             s_track[i].fx = s_cam[i][0]; s_track[i].fy = s_cam[i][1];
             return i;
         }
     int best = -1, best_d = 1 << 30;
     for (int i = 0; i < CACHE_VIEWS; i++) {
-        if (!s_track[i].valid) continue;
+        if (!s_track[i].valid || (used & (1u << i))) continue;
         int dh = wrap_delta(h, s_track[i].h), dv = wrap_delta(v, s_track[i].v);
         int d = dh * dh + dv * dv;
         if (d < best_d) { best_d = d; best = i; }
@@ -454,7 +470,7 @@ static void tag_vram_changes(void)
 static void build_groups(const FrameRecord *rec)
 {
     s_ngroups = 0;
-    unsigned line = 1;
+    unsigned line = 1, used = 0;
     while (line <= 224 && s_ngroups < MAX_VIEW_GROUPS) {
         const Ppu *a = (const Ppu *)rec->regs[line].b;
         unsigned end = line;
@@ -466,8 +482,9 @@ static void build_groups(const FrameRecord *rec)
             end++;
         }
         if (!(a->inidisp & 0x80) && end - line + 1 >= 16 && (a->bgmode & 7) == 1) {
-            int view = view_for_scroll(a->hScroll[0], a->vScroll[0]);
+            int view = view_for_scroll(a->hScroll[0], a->vScroll[0], used);
             if (view >= 0) {
+                used |= 1u << view;
                 ViewGroup *g = &s_groups[s_ngroups++];
                 g->y0 = (int)line;
                 g->y1 = (int)end + 1;
@@ -726,7 +743,31 @@ void RnrrRasterObserve(const struct Ppu *ppu, unsigned line, void *context)
 {
     (void)context;
     if (line < 1 || line > 224) return;
-    memcpy(s_rec[s_cur].regs[line].b, ppu, PPU_SAVESTATE_REGS_SIZE);
+    FrameRecord *rec = &s_rec[s_cur];
+    memcpy(rec->regs[line].b, ppu, PPU_SAVESTATE_REGS_SIZE);
+    if (line == 1) rec->nseg = 0;
+    if (rec->nseg > 0) {
+        const OamSeg *last = &rec->seg[rec->nseg - 1];
+        if (!memcmp(last->oam, ppu->oam, sizeof(last->oam)) &&
+            !memcmp(last->high_oam, ppu->highOam, sizeof(last->high_oam)))
+            return;
+        if (rec->nseg >= OAM_SEGS) return;
+    }
+    OamSeg *sg = &rec->seg[rec->nseg++];
+    sg->line = line;
+    memcpy(sg->oam, ppu->oam, sizeof(sg->oam));
+    memcpy(sg->high_oam, ppu->highOam, sizeof(sg->high_oam));
+}
+
+static int oam_segs_equal(const FrameRecord *a, const FrameRecord *b)
+{
+    if (a->nseg != b->nseg) return 0;
+    for (int i = 0; i < a->nseg; i++)
+        if (a->seg[i].line != b->seg[i].line ||
+            memcmp(a->seg[i].oam, b->seg[i].oam, sizeof(a->seg[i].oam)) ||
+            memcmp(a->seg[i].high_oam, b->seg[i].high_oam, sizeof(a->seg[i].high_oam)))
+            return 0;
+    return 1;
 }
 
 void RnrrEndSimFrame(const uint8_t *field, unsigned number)
@@ -818,8 +859,12 @@ void RnrrEndSimFrame(const uint8_t *field, unsigned number)
     if (!s_scratch) s_scratch = calloc(1, sizeof(Ppu));
     if (!s_snap || !s_scratch) return;
     FrameRecord *rec = &s_rec[s_cur];
-    memcpy(rec->oam, g_ppu->oam, sizeof(rec->oam));
-    memcpy(rec->high_oam, g_ppu->highOam, sizeof(rec->high_oam));
+    if (rec->nseg <= 0) {
+        rec->nseg = 1;
+        rec->seg[0].line = 1;
+        memcpy(rec->seg[0].oam, g_ppu->oam, sizeof(rec->seg[0].oam));
+        memcpy(rec->seg[0].high_oam, g_ppu->highOam, sizeof(rec->seg[0].high_oam));
+    }
     rec->number = number;
     rec->extra = s_extra;
     rec->valid = 1;
@@ -827,16 +872,15 @@ void RnrrEndSimFrame(const uint8_t *field, unsigned number)
         const FrameRecord *key = &s_key[s_key_cur];
         s_perf.sim++;
         int regs_changed = !key->valid || memcmp(rec->regs, key->regs, sizeof(rec->regs)) != 0;
-        int oam_changed = !key->valid || memcmp(rec->oam, key->oam, sizeof(rec->oam)) != 0 ||
-                          memcmp(rec->high_oam, key->high_oam, sizeof(rec->high_oam)) != 0;
+        int oam_changed = !key->valid || !oam_segs_equal(rec, key);
         if (regs_changed || (oam_changed && number - s_key_field >= s_key_period)) {
             s_perf.upd++;
             if (key->valid && getenv("RNRR_LERP_LOG")) {
                 unsigned nr = 0, no = 0, nh = 0, first = 0;
                 for (unsigned l = 1; l <= 224; l++)
                     if (memcmp(rec->regs[l].b, key->regs[l].b, PPU_SAVESTATE_REGS_SIZE)) { nr++; if (!first) first = l; }
-                for (unsigned i = 0; i < 0x100; i++) if (rec->oam[i] != key->oam[i]) { no++; if (!first) first = 1000 + i; }
-                for (unsigned i = 0; i < 0x20; i++) nh += rec->high_oam[i] != key->high_oam[i];
+                for (unsigned i = 0; i < 0x100; i++) if (rec->seg[0].oam[i] != key->seg[0].oam[i]) { no++; if (!first) first = 1000 + i; }
+                for (unsigned i = 0; i < 0x20; i++) nh += rec->seg[0].high_oam[i] != key->seg[0].high_oam[i];
                 const Ppu *a = (const Ppu *)rec->regs[100].b, *b = (const Ppu *)key->regs[100].b;
                 fprintf(stderr, "[rnrr-upd] field=%u race=%d oc=%u regs_lines=%u first=%u oam_words=%u hoam=%u h1=%u->%u v1=%u->%u\n",
                         number, s_race_frame, s_overclock, nr, first, no, nh, b->hScroll[0], a->hScroll[0], b->vScroll[0], a->vScroll[0]);
@@ -882,7 +926,7 @@ static int same_scene(const FrameRecord *prev, const FrameRecord *cur)
     return 1;
 }
 
-static void lerp_oam(Ppu *dst, const FrameRecord *prev, const FrameRecord *cur, double alpha)
+static void lerp_oam(Ppu *dst, const OamSeg *prev, const OamSeg *cur, double alpha)
 {
     int px[128], py[128], cx[128], cy[128];
     uint8_t psz[128], csz[128], used[128] = {0};
@@ -1021,9 +1065,28 @@ int RnrrDrawFrame(uint8_t *dst, size_t pitch, const uint8_t *field,
     s_scratch->widescreenLineEnhancerContext = NULL;
     memset(&s_scratch->mode7Hd, 0, sizeof(s_scratch->mode7Hd));
     PpuBeginDrawing(s_scratch, dst, pitch, s_snap->renderFlags);
-    lerp_oam(s_scratch, prev, cur, alpha);
+    /* Each OAM band is interpolated against the same band of the previous
+     * key frame, then swapped in as the line walk reaches it. */
+    static OamSeg lerped[OAM_SEGS];
+    int nseg = cur->nseg;
+    int bands_match = prev->nseg == cur->nseg;
+    for (int i = 0; i < nseg; i++) {
+        memcpy(s_scratch->oam, cur->seg[i].oam, sizeof(s_scratch->oam));
+        memcpy(s_scratch->highOam, cur->seg[i].high_oam, sizeof(s_scratch->highOam));
+        if (bands_match && prev->seg[i].line == cur->seg[i].line)
+            lerp_oam(s_scratch, &prev->seg[i], &cur->seg[i], alpha);
+        lerped[i].line = cur->seg[i].line;
+        memcpy(lerped[i].oam, s_scratch->oam, sizeof(lerped[i].oam));
+        memcpy(lerped[i].high_oam, s_scratch->highOam, sizeof(lerped[i].high_oam));
+    }
+    int si = 0;
 
     for (unsigned line = 1; line <= 224; line++) {
+        while (si < nseg && lerped[si].line <= line) {
+            memcpy(s_scratch->oam, lerped[si].oam, sizeof(s_scratch->oam));
+            memcpy(s_scratch->highOam, lerped[si].high_oam, sizeof(s_scratch->highOam));
+            si++;
+        }
         RegBlock regs = cur->regs[line];
         Ppu *r = (Ppu *)regs.b;
         const Ppu *p = (const Ppu *)prev->regs[line].b;

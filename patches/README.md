@@ -34,3 +34,11 @@ snesrecomp.patch
 - snes_savestate_menu.c: labels in Spanish and in Xbox terms (an Xbox pad maps
   SNES buttons by position: the menu's SNES A/X/B are the pad's B/Y/A), and
   the keyboard hint matches this port's WASD + JIKL layout.
+- snes/ppu.c (raster journal): OAM rewritten during the visible lines is
+  replayed per line. The journal skipped OAMDATA as an upload port, so the
+  field was drawn with the table as it ended; RNRR's 2-player split DMAs the
+  upper view's sprites in vblank and the lower view's at line 113, and the
+  upper half lost its cars. The first OAMDATA write on each visible line now
+  snapshots the table; the render swaps the snapshots in at their lines and
+  gives the guest its own table back afterwards. Fields that upload only in
+  vblank record nothing.

@@ -46,7 +46,7 @@ avisa si es otra versión o está dañada.
 | | Original (Super Nintendo, 1993) | Esta versión |
 |---|---|---|
 | **Programa** | Cartucho o emulador | Programa nativo de Windows, portátil, sin instalación |
-| **Panorámico** | 4:3 (en un monitor actual: estirado o con bandas) | **16:9, 21:9 o ajustado a tu monitor**: en carrera **se ve más pista a los lados**, sin deformar. Los menús se muestran en 4:3 con la proporción correcta |
+| **Panorámico** | 4:3 (en un monitor actual: estirado o con bandas) | **16:9, 21:9 o ajustado a tu monitor**: en carrera **se ve más pista a los lados**, sin deformar, también a **pantalla partida para 2 jugadores**. Los menús se muestran en 4:3 con la proporción correcta |
 | **Imagen** | Píxeles de 256×224 | Filtros **Suavizada** (Scale2x + antialiasing FXAA: sin dientes de sierra), **Nítida**, **CRT** y **TV clásica** |
 | **Fluidez** | Unas 20 imágenes por segundo en carrera | **Movimiento suave** opcional: interpola hasta la frecuencia de tu monitor, sin cambiar la velocidad del juego |
 | **Mando** | Mando de SNES | **Mando Xbox** (y PlayStation, Switch Pro…) listo para usar |
@@ -69,12 +69,14 @@ de sierra; la opción por defecto) y **CRT** (líneas de un televisor de tubo).
 
 ![Carrera en 21:9](docs/img/galeria-219.jpg)
 
+![Dos jugadores a pantalla partida en 21:9](docs/img/dos-jugadores.jpg)
+
 | | |
 |---|---|
 | ![Carrera en 16:9](docs/img/galeria-169.jpg) | ![Otra curva en 21:9](docs/img/galeria-219b.jpg) |
 
 Capturas en 21:9 (2520×1080) y 16:9 (1920×1080) con el filtro Suavizada, hechas con la versión
-europea.
+europea; la segunda, a pantalla partida para 2 jugadores.
 
 ## Controles
 
@@ -104,9 +106,6 @@ misma tabla.
   intérprete del motor, que trabaja directamente con tu ROM. La versión recompilada lleva código
   traducido de la ROM, así que no se puede distribuir; si quieres, puedes generarla tú mismo con tu
   ROM (ver *Compilar desde el código*). Ambas se juegan igual.
-- **Problema conocido:** en **2 jugadores a pantalla partida en 21:9** puede parpadear un bloque de
-  gráficos en el margen izquierdo de la mitad superior. Mientras se corrige, usa 4:3 para jugar a
-  dos.
 - **Algo no funciona**: abre una [incidencia](https://github.com/Cris9870/rock-and-roll-racing-pc/issues)
   indicando tu versión de la ROM (Europa / EE. UU.) y qué estabas haciendo.
 
@@ -131,8 +130,10 @@ para la ROM de EE. UU.; este proyecto añade:
 - **Filtros** (`assets/shaders/`): presets GLSL propios, como Scale2x + FXAA + bilineal nítido.
 - **Lanzador** (`src/rnrr_launcher.cpp`, Dear ImGui + SDL3): opciones, controles, comprobación de la
   ROM y su aspecto, que genera a partir de tu ROM en tu PC (`src/rnrr_art.cpp`).
-- **Partidas guardadas desde el mando** y el menú de partidas traducido (parche al motor en
-  `patches/snesrecomp.patch`).
+- **Partidas guardadas desde el mando** y el menú de partidas traducido.
+- **Correcciones al motor** (`patches/snesrecomp.patch`): por ejemplo, a pantalla partida el juego
+  cambia los sprites a mitad de imagen y el motor solo dibujaba los de la mitad inferior; ahora cada
+  mitad muestra sus coches.
 
 Notas técnicas detalladas (en inglés), con las direcciones de memoria y cómo se resolvió cada
 problema: [docs/TECHNICAL.md](docs/TECHNICAL.md); los cambios al motor, en

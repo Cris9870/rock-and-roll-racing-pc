@@ -400,7 +400,7 @@ index e01e3ba..8a7b71e 100644
   * describe the same elapsed time. Extended-frame hosts use absolute sync;
   * legacy hosts and unmapped boot (e.g. Mega Man X's IPL polling) keep relative
 diff --git a/runner/src/snes/ppu.c b/runner/src/snes/ppu.c
-index 25dcfe0..f753bf1 100644
+index 25dcfe0..e949ba6 100644
 --- a/runner/src/snes/ppu.c
 +++ b/runner/src/snes/ppu.c
 @@ -838,7 +838,9 @@ void ppu_runLine(Ppu* ppu, int line) {
@@ -414,6 +414,160 @@ index 25dcfe0..f753bf1 100644
        debug_server_on_ppu_line_drawn(line, 1, ppu->bgmode);
        PPU_T0; PpuDrawWholeLine(ppu, line); PPU_ACC(g_ppu_sec_line_ms);
  #ifdef SNESRECOMP_INTERP_PROFILE
+@@ -3158,6 +3160,22 @@ void ppu_set_vram_write_log_hook(PpuVramWriteLogHook hook) {
+ /* key: beam position within the field, monotonic from its start at V=225
+  * (0) through vblank (36 = V=261) and the visible lines (37 = V=0 ...). */
+ typedef struct { uint16_t key; uint16_t reg; uint8_t val; } PpuRasterEntry;
++/* OAM rewritten during the visible lines. OAMDATA is an upload port and is
++ * not journaled byte by byte; but a split-screen game can re-upload the whole
++ * table at its split (Rock n' Roll Racing DMAs one view's sprites in vblank
++ * and the other view's at line 113, under forced blank). Rendering the field
++ * with the final table then lost the first view's sprites. So the first
++ * OAMDATA write on each visible line snapshots the table as it stood before
++ * it: the lines up to that one are drawn with that snapshot, and the rest with
++ * the next snapshot, or with the table as the field ended. A field that only
++ * uploads in vblank (nearly every game) records nothing and renders as
++ * before. */
++#define PPU_RASTER_OAM_MAX 8
++typedef struct {
++  uint16_t key;
++  uint16_t oam[0x100];
++  uint8_t highOam[0x20];
++} PpuRasterOam;
+ typedef struct {
+   uint8_t regs[PPU_SAVESTATE_REGS_SIZE];   /* inidisp..cgwsel at field start */
+   uint8_t scrollPrev, scrollPrev2, m7prev;
+@@ -3165,6 +3183,10 @@ typedef struct {
+   int count;
+   uint32_t dropped;
+   PpuRasterEntry e[PPU_RASTER_MAX];
++  int oamCount, oamOverflow, oamEndValid;
++  PpuRasterOam oam[PPU_RASTER_OAM_MAX];
++  uint16_t endOam[0x100];                  /* the table as the field ended */
++  uint8_t endHighOam[0x20];
+ } PpuRasterField;
+ static PpuRasterField s_field[2];
+ static int s_raster_cur;             /* recording; the other is completed */
+@@ -3178,6 +3200,10 @@ static int s_raster_hdmaen_pending;
+ static struct {
+   uint8_t oamAdr, oamInHigh, oamSecondWrite, oamBuffer;
+ } s_raster_port;
++/* The guest's OAM while a render swaps in a field's mid-frame snapshots. */
++static int s_raster_oam_active, s_raster_oam_next;
++static uint16_t s_raster_guest_oam[0x100];
++static uint8_t s_raster_guest_high_oam[0x20];
+ 
+ /* Only the machine's PPU journals: the debug server and a few tools run
+  * ppu_write on scratch copies. */
+@@ -3213,6 +3239,38 @@ static void raster_snapshot(PpuRasterField *f, const Ppu *ppu) {
+   f->hdmaen = g_snesrecomp_last_hdmaen;
+   f->count = 0;
+   f->dropped = 0;
++  f->oamCount = 0;
++  f->oamOverflow = 0;
++  f->oamEndValid = 0;
++}
++
++/* Called by ppu_write before an OAMDATA write lands. */
++static void raster_oam_note(const Ppu *ppu) {
++  PpuRasterField *f;
++  uint16_t v, key;
++  if (!s_raster_armed || s_raster_rendering || g_ppu_wlog_src == kPpuWlogReplay)
++    return;
++  v = g_snes->vPos;
++  /* Writes before line 1 (vblank, line 0) precede every drawn line. */
++  if (v < 1 || v > 224)
++    return;
++  f = &s_field[s_raster_cur];
++  key = raster_key(v);
++  if (f->oamCount && f->oam[f->oamCount - 1].key == key)
++    return;
++  if (f->oamCount >= PPU_RASTER_OAM_MAX) {
++    f->oamOverflow = 1;
++    return;
++  }
++  f->oam[f->oamCount].key = key;
++  memcpy(f->oam[f->oamCount].oam, ppu->oam, sizeof(ppu->oam));
++  memcpy(f->oam[f->oamCount].highOam, ppu->highOam, sizeof(ppu->highOam));
++  f->oamCount++;
++}
++
++static void raster_oam_load(Ppu *ppu, const uint16_t *oam, const uint8_t *high) {
++  memcpy(ppu->oam, oam, sizeof(ppu->oam));
++  memcpy(ppu->highOam, high, sizeof(ppu->highOam));
+ }
+ 
+ void ppu_rasterBegin(Ppu *ppu) {
+@@ -3231,6 +3289,14 @@ void ppu_rasterFieldBoundary(void) {
+   if (!s_raster_armed || !ppu)
+     return;
+   s_raster_rendering = 0;
++  {
++    PpuRasterField *done = &s_field[s_raster_cur];
++    if (done->oamCount) {
++      memcpy(done->endOam, ppu->oam, sizeof(ppu->oam));
++      memcpy(done->endHighOam, ppu->highOam, sizeof(ppu->highOam));
++      done->oamEndValid = 1;
++    }
++  }
+   s_raster_cur ^= 1;
+   s_raster_have_completed = 1;
+   raster_snapshot(&s_field[s_raster_cur], ppu);
+@@ -3291,6 +3357,14 @@ void ppu_rasterRenderBegin(Ppu *ppu) {
+   s_raster_next = 0;
+   s_raster_hdmaen_pending = 0;
+   s_raster_rendering = 1;
++  s_raster_oam_active = 0;
++  if (s_raster_have_completed && f->oamCount && f->oamEndValid && !f->oamOverflow) {
++    memcpy(s_raster_guest_oam, ppu->oam, sizeof(ppu->oam));
++    memcpy(s_raster_guest_high_oam, ppu->highOam, sizeof(ppu->highOam));
++    raster_oam_load(ppu, f->oam[0].oam, f->oam[0].highOam);
++    s_raster_oam_next = 0;
++    s_raster_oam_active = 1;
++  }
+ }
+ 
+ static void raster_replay(Ppu *ppu, uint16_t reg, uint8_t val) {
+@@ -3324,6 +3398,19 @@ void ppu_rasterApplyLine(Ppu *ppu, int line) {
+     }
+     s_raster_next++;
+   }
++  if (s_raster_oam_active) {
++    int moved = 0;
++    while (s_raster_oam_next < f->oamCount && f->oam[s_raster_oam_next].key <= limit) {
++      s_raster_oam_next++;
++      moved = 1;
++    }
++    if (moved) {
++      if (s_raster_oam_next < f->oamCount)
++        raster_oam_load(ppu, f->oam[s_raster_oam_next].oam, f->oam[s_raster_oam_next].highOam);
++      else
++        raster_oam_load(ppu, f->endOam, f->endHighOam);
++    }
++  }
+ }
+ 
+ /* The render reconstructed the completed field. Writes the guest has made
+@@ -3346,6 +3433,10 @@ void ppu_rasterRenderEnd(Ppu *ppu) {
+   ppu->oamInHigh = s_raster_port.oamInHigh;
+   ppu->oamSecondWrite = s_raster_port.oamSecondWrite;
+   ppu->oamBuffer = s_raster_port.oamBuffer;
++  if (s_raster_oam_active) {
++    raster_oam_load(ppu, s_raster_guest_oam, s_raster_guest_high_oam);
++    s_raster_oam_active = 0;
++  }
+ }
+ 
+ /* Snapshot of the journal as the renderer will consume it, for the debug
+@@ -3426,6 +3517,8 @@ void ppu_write(Ppu* ppu, uint8_t adr, uint8_t val) {
+       ppu->oamSecondWrite = false;
+       break;
+     case 0x04: {
++      if (ppu == raster_machine_ppu())
++        raster_oam_note(ppu);
+       if(ppu->oamInHigh) {
+         int hidx = ((ppu->oamAdr & 0xf) << 1) | ppu->oamSecondWrite;
+         ppu->highOam[hidx] = val;
 diff --git a/runner/src/snes_savestate_menu.c b/runner/src/snes_savestate_menu.c
 index f42f1ab..bcfbe2f 100644
 --- a/runner/src/snes_savestate_menu.c

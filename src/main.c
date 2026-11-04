@@ -90,7 +90,8 @@ static void rnrr_on_rom_loaded(const uint8_t *rom, size_t size)
         interp_bridge_set_scheduler_aot_policy(0);
         fprintf(stderr, "[rnrr] running through the interpreter\n");
     }
-    RnrrRomPatchApply((uint8_t *)rom, size);
+    if (!getenv("RNRR_NO_ROMPATCH"))  /* test switch: run the unpatched game */
+        RnrrRomPatchApply((uint8_t *)rom, size);
 }
 
 static const char kRnrrDefaultConfigIni[] =
