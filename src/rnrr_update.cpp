@@ -521,6 +521,12 @@ bool RnrrUpdater::relaunch()
 {
     const std::wstring exe = self_exe();
     if (exe.empty()) return false;
+    /* The new process inherits this environment. The test hooks must not
+     * follow it: with them the relaunched copy would "update" and relaunch
+     * itself again, forever. */
+    for (const wchar_t *v : {L"RNRR_LAUNCHER_UPDATE_TEST", L"RNRR_UPDATE_TEST_RELAUNCH", L"RNRR_UPDATE_FAKE_VERSION",
+                             L"RNRR_UPDATE_API"})
+        SetEnvironmentVariableW(v, nullptr);
     std::wstring cmd = L"\"" + exe + L"\"";
     const std::wstring dir = fs::path(exe).parent_path().native();
     STARTUPINFOW si;
