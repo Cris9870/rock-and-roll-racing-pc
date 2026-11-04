@@ -67,6 +67,14 @@ cmake --build build-public --target RockNRollRacingSNESRecomp
 bash tools/package_public.sh build-public      # crea dist/*.zip
 ```
 
+La descarga oficial añade además estas opciones de optimización (ejecutable más pequeño y rápido):
+
+```sh
+  -DCMAKE_C_FLAGS="-O3 -march=x86-64 -mtune=generic -fno-semantic-interposition -fno-trapping-math -ffunction-sections -fdata-sections -fno-ident" \
+  -DCMAKE_CXX_FLAGS="-O3 -march=x86-64 -mtune=generic -fno-semantic-interposition -fno-trapping-math -ffunction-sections -fdata-sections -fno-ident" \
+  -DCMAKE_EXE_LINKER_FLAGS="-Wl,--gc-sections -Wl,-O2 -Wl,--strip-all"
+```
+
 `RNRR_PUBLIC_BUILD=ON` produce el ejecutable distribuible: no lleva nada derivado de una ROM y
 ejecuta el juego con el intérprete del framework.
 
