@@ -1,16 +1,20 @@
-# Rock & Roll Racing — versión nativa para Windows
+# Rock & Roll Racing para PC — versión nativa para Windows
+
+**Rock n' Roll Racing native PC port for Windows**: widescreen 16:9 and 21:9 ultrawide, 4K,
+high refresh rate, shaders, Xbox controller and save states. Bring your own ROM.
+[English version below](#english).
 
 ![Carrera en 21:9: se ve más pista a los lados, sin deformar la imagen](docs/img/portada.jpg)
 
 Una versión nativa para **Windows 10/11** del **Rock & Roll Racing** de Super Nintendo (1993), con
-**panorámico real hasta 21:9**, **filtros sin dientes de sierra**, **mando Xbox** y **teclado**, y
-**partidas guardadas en cualquier momento**. Todo desde un único programa portátil: lo abres, le
-das tu ROM la primera vez y a jugar.
+**panorámico real hasta 21:9**, **resolución de tu monitor (1080p, 1440p, 4K, ultrawide)**,
+**filtros sin dientes de sierra**, **mando Xbox** y **teclado**, y **partidas guardadas en cualquier
+momento**. Todo desde un único programa portátil: lo abres, le das tu ROM la primera vez y a jugar.
+
+El juego también se conoce como *Rock n' Roll Racing*, *Rock N Roll Racing* o *RNRR*.
 
 **Este repositorio no contiene nada del juego.** Necesitas tu propia copia (la ROM de Super Nintendo,
 `.sfc` o `.smc`).
-
-*English summary at the end.*
 
 ## Descarga y uso (sin instalar nada)
 
@@ -53,8 +57,9 @@ avisa si es otra versión o está dañada.
 |---|---|---|
 | **Programa** | Cartucho o emulador | Programa nativo de Windows, portátil, sin instalación |
 | **Panorámico** | 4:3 (en un monitor actual: estirado o con bandas) | **16:9, 21:9 o ajustado a tu monitor**: en carrera **se ve más pista a los lados**, sin deformar, también a **pantalla partida para 2 jugadores**. Los menús se muestran en 4:3 con la proporción correcta |
+| **Resolución** | 256×224 en un televisor | **La de tu monitor** en pantalla completa: **1080p, 1440p o 4K**, y ultrawide como 2560×1080 o 3440×1440. La imagen del juego se amplía con los filtros (no añade detalle). En monitores 32:9 se ve a 21:9 con bandas a los lados |
 | **Imagen** | Píxeles de 256×224 | Filtros **Suavizada** (Scale2x + antialiasing FXAA: sin dientes de sierra), **Nítida**, **CRT** y **TV clásica** |
-| **Fluidez** | Unas 20 imágenes por segundo en carrera | **Movimiento suave** opcional: interpola hasta la frecuencia de tu monitor, sin cambiar la velocidad del juego |
+| **Fluidez** | Unas 20 imágenes por segundo en carrera | **Movimiento suave** opcional: interpola hasta la frecuencia de tu monitor (60, 120, 144 o 240 Hz), sin cambiar la velocidad del juego |
 | **Mando** | Mando de SNES | **Mando Xbox** (y PlayStation, Switch Pro…) listo para usar |
 | **Teclado** | — | **W A S D** + **J I K L**, **Q / O** para L / R; jugador 2 con flechas y teclado numérico |
 | **Guardar** | Contraseñas entre carreras | **Partidas guardadas en cualquier momento** (10 ranuras) y **rebobinado**, también desde el mando |
@@ -120,7 +125,8 @@ misma tabla.
   indicando tu versión de la ROM (Europa / EE. UU.) y qué estabas haciendo.
 
 Requisitos: **Windows 10 u 11 de 64 bits** con una tarjeta gráfica compatible con OpenGL 3 (cualquiera
-de la última década). Unos 10 MB libres.
+de la última década). Unos 10 MB libres. Funciona con cualquier resolución y frecuencia de monitor,
+4K y 144 Hz incluidos.
 
 ## Cómo está hecho
 
@@ -196,18 +202,33 @@ código traducido de tu ROM: **no lo distribuyas.**
 
 ---
 
-## English summary
+<a id="english"></a>
 
-A native Windows 10/11 build of the Super Nintendo **Rock n' Roll Racing** (1993), built on the
+## English: Rock n' Roll Racing PC port (widescreen, 4K)
+
+A native Windows 10/11 PC port of the Super Nintendo racing game **Rock n' Roll Racing** (1993,
+also written *Rock & Roll Racing* or *Rock N Roll Racing*), built on the
 [snesrecomp](https://github.com/mstan/snesrecomp) static recompiler and the
 [fulalas](https://github.com/fulalas/RockNRollRacingSNESRecomp) port. **Bring your own ROM**: nothing
-from the game ships here. Download
+from the game ships here.
+
+**How to play:** download
 [`RockAndRollRacingPC-windows.zip`](https://github.com/Cris9870/rock-and-roll-racing-pc/releases/latest/download/RockAndRollRacingPC-windows.zip),
-unzip it, run `RockNRollRacingSNESRecomp.exe`, pick (or drop) your ROM and press **JUGAR**. Features:
-true widescreen in races (16:9, 21:9 or fit-to-monitor; menus stay 4:3), jaggy-free image filters
-(Scale2x + FXAA), optional motion smoothing to your monitor's refresh rate, Xbox-style gamepads and a
-WASD/JIKL keyboard layout, save states and rewind from the pad (Select + RB), and a portable,
-game-styled Spanish launcher that updates itself from GitHub Releases (one click, SHA-256 checked,
-player files untouched). The European release is fully tested; the USA release is supported by
-byte-signature patching but not yet verified, so reports are welcome. Non-commercial license
-(PolyForm Noncommercial 1.0.0).
+unzip it, run `RockNRollRacingSNESRecomp.exe`, pick (or drag and drop) your `.sfc` / `.smc` ROM and
+press **JUGAR** ("play"). No installation; the folder is portable. The launcher is in Spanish.
+
+| | Original (SNES, 1993) | This port |
+|---|---|---|
+| **Widescreen** | 4:3 | **16:9, 21:9 ultrawide or fit-to-monitor** in races: you see more of the track, nothing is stretched, also in 2-player split screen. Menus stay 4:3 |
+| **Resolution** | 256×224 | **Your monitor's resolution** in fullscreen: **1080p, 1440p, 4K**, ultrawide 2560×1080 or 3440×1440 (upscaled through the filters; 32:9 shows 21:9 with side bars) |
+| **Smoothness** | About 20 fps in races | Optional **motion smoothing** up to your refresh rate (**60, 120, 144, 240 Hz**) without changing game speed |
+| **Image** | Raw pixels | **Shaders**: *Suavizada* (smooth: Scale2x + FXAA, no jaggies), *Nítida* (sharp), CRT and *TV clásica* (classic TV) |
+| **Controls** | SNES pad | **Xbox controller** (also PlayStation, Switch Pro) and keyboard (WASD + JIKL, Q / O for L / R) |
+| **Saving** | Passwords | **Save states** anytime (10 slots) and **rewind**, also from the pad (Select + RB) |
+| **Updates** | — | The launcher updates itself from GitHub Releases in one click (SHA-256 checked, your files untouched) |
+
+The European release is fully tested; the USA release is supported by byte-signature patching but
+not yet verified, so reports are welcome in [Issues](https://github.com/Cris9870/rock-and-roll-racing-pc/issues).
+Requirements: 64-bit Windows 10 or 11 and an OpenGL 3 graphics card. Technical notes:
+[docs/TECHNICAL.md](docs/TECHNICAL.md). Non-commercial license (PolyForm Noncommercial 1.0.0).
+Fan project, not affiliated with Blizzard Entertainment, Interplay or Nintendo.
