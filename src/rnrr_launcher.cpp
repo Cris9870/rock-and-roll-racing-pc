@@ -8,6 +8,7 @@
 #include "rnrr_launcher.h"
 #include "rnrr_art.h"
 #include "rnrr_revision.h"
+#include "rnrr_settings.h"
 #include "rnrr_update.h"
 
 #include <SDL3/SDL.h>
@@ -33,14 +34,11 @@ namespace {
 
 // ---------------------------------------------------------------- settings --
 
-enum { ASPECT_4_3, ASPECT_16_9, ASPECT_21_9, ASPECT_FIT };
-enum { IMAGE_SMOOTH, IMAGE_SHARP, IMAGE_CRT, IMAGE_TV };
-
-/* Suavizada: Scale2x x2 + edge anti-aliasing + sharp bilinear (no jaggies).
- * Nitida: sharp bilinear only (even, crisp pixels at any output size). */
-const char *kImageShader[] = {
-    "assets/shaders/rnrr-suavizada.glslp", "assets/shaders/rnrr-nitida.glslp",
-    "assets/shaders/crt-soft.glslp", "assets/shaders/ntsc-svideo.glslp"};
+/* The same choices, in the same order, as the in-game OPTIONS screen. */
+enum { ASPECT_4_3 = RNRR_ASPECT_4_3, ASPECT_16_9 = RNRR_ASPECT_16_9,
+       ASPECT_21_9 = RNRR_ASPECT_21_9, ASPECT_FIT = RNRR_ASPECT_FIT };
+enum { IMAGE_SMOOTH = RNRR_IMAGE_SMOOTH, IMAGE_SHARP = RNRR_IMAGE_SHARP,
+       IMAGE_CRT = RNRR_IMAGE_CRT, IMAGE_TV = RNRR_IMAGE_TV };
 
 struct Settings {
     int aspect = ASPECT_16_9;
@@ -173,13 +171,7 @@ Settings load_settings(const char *default_ini)
     std::string v = ini_get(ini, "Graphics", "Fullscreen", &found);
     if (found) s.fullscreen = std::atoi(v.c_str()) != 0;
     v = ini_get(ini, "Graphics", "Shader", &found);
-    if (found) {
-        /* The old "sharp"/plain-pixel choices both move to the new default. */
-        s.image = IMAGE_SMOOTH;
-        if (v.find("rnrr-nitida") != std::string::npos) s.image = IMAGE_SHARP;
-        else if (v.find("crt") != std::string::npos) s.image = IMAGE_CRT;
-        else if (v.find("ntsc") != std::string::npos) s.image = IMAGE_TV;
-    }
+    if (found) s.image = RnrrSettingsImageFromShader(v.c_str());
     v = ini_get(ini, "Sound", "Volume", &found);
     if (found) s.volume = SDL_clamp(std::atoi(v.c_str()), 0, 100);
     v = ini_get(ini, "Sound", "EnableAudio", &found);
@@ -282,7 +274,7 @@ bool save_settings(const Settings &s, const char *default_ini)
     std::string ini;
     if (!read_file(exe_path("config.ini"), ini)) ini = default_ini;
     ini = ini_set(ini, "Graphics", "Fullscreen", s.fullscreen ? "1" : "0");
-    ini = ini_set(ini, "Graphics", "Shader", kImageShader[s.image]);
+    ini = ini_set(ini, "Graphics", "Shader", RnrrSettingsShaderPath(s.image));
     ini = ini_set(ini, "Graphics", "LinearFiltering", "0");
     /* SNES pixels are 7:6 on a TV; 8:7/1:1 squeeze the picture and make the
      * widescreen field wider than the game can fill. */
@@ -292,20 +284,7 @@ bool save_settings(const Settings &s, const char *default_ini)
     ini = ini_set(ini, "Sound", "Volume", std::to_string(s.volume > 0 ? s.volume : 100));
     bool ok = write_file(exe_path("config.ini"), ini);
     ok = write_file(exe_path("engine.cfg"), s.engine ? "interpreter\n" : "native\n") && ok;
-
-    const char *aspect = s.aspect == ASPECT_21_9 ? "21:9" : s.aspect == ASPECT_FIT ? "fit" : "16:9";
-    std::string toml =
-        "format_version = 1\n"
-        "\n[[package]]\nid = \"rnrr.display\"\nversion = \"1.0.0\"\n"
-        "\n[[feature]]\npackage_id = \"rnrr.display\"\nid = \"overclock\"\nenabled = true\n"
-        "\n[[feature]]\npackage_id = \"rnrr.display\"\nid = \"presentation-fps\"\nenabled = ";
-    toml += s.smooth ? "true\n" : "false\n";
-    toml += "\n[[feature]]\npackage_id = \"rnrr.display\"\nid = \"widescreen\"\nenabled = ";
-    toml += s.aspect == ASPECT_4_3 ? "false\n" : "true\n";
-    toml += "\n[feature.values]\naspect = \"";
-    toml += aspect;
-    toml += "\"\n";
-    return write_file(exe_path("mods/preloaded/state.toml"), toml) && ok;
+    return RnrrSettingsWriteModState(s.aspect, s.smooth) && ok;
 }
 
 // --------------------------------------------------------------------- ROM --

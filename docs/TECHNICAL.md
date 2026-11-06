@@ -8,13 +8,16 @@ native-code debugging. Build commands are in the [README](../README.md).
 There are no unit tests. Verification is done by running the game headless and inspecting dumps:
 
 ```sh
-# A script makes the host headless; --config points at an ini with EnableAudio = 0.
-./RockNRollRacingSNESRecomp.exe --config test.ini --no-launcher --script inputs.txt "<rom>"
+# A script skips the launcher; --config points at an ini with EnableAudio = 0. The game still
+# opens its window: SNESRECOMP_HIDDEN_WINDOW=1 creates it hidden (OpenGL and shaders still run).
+SNESRECOMP_HIDDEN_WINDOW=1 ./RockNRollRacingSNESRecomp.exe --config test.ini --no-launcher --script inputs.txt "<rom>"
 #   script grammar: wait N | press b+right[+p2:b] N | dump <tag> | turbo on|off | reset | quit
 #   SNESRECOMP_DUMP_DIR=dir -> each `dump` writes <tag>.fb.bmp (core 256 px field), .wram.bin, .vram.bin, .oam.bin
 #   --framedump dir + SNESRECOMP_FRAMEDUMP_PIXELS=1 SNESRECOMP_FRAMEDUMP_START/END=N
 #                           -> presented frames as frame_NNNNNN.bmp, at widescreen width (342 for 16:9, 448 for 21:9)
 #   RNRR_NATIVE=1 / RNRR_INTERPRETER=1 force an engine; RNRR_NO_ROMPATCH=1 runs the game without this port's ROM patches
+#   RNRR_TEST_WAV=dir RNRR_TEST_WAV_FRAMES=a,b,c -> dir/a<N>.wav: the last ~2 s of DSP output at
+#                           those frames, also with EnableAudio = 0 (check music without a sound device)
 # Launcher, hidden, to a screenshot (exe with no args):
 RNRR_LAUNCHER_SHOT=out.bmp ./RockNRollRacingSNESRecomp.exe
 #   RNRR_LAUNCHER_PICK=<rom> acts as a dropped file; RNRR_LAUNCHER_SHOT_WAIT_ART=1 waits for the art job
@@ -46,7 +49,8 @@ Compared with USA, the European bank-0 code is +$A0 bytes, the sprite-attribute 
 deleted. Save-state identity stays `"rnrr-stock"` (`src/game_rtl.c`) for compatibility.
 
 **ROM patching happens in three places, and they must stay consistent.**
-1. `tools/patch_rom.py` patches the image that `regen.sh` feeds to the code generator.
+1. `tools/patch_rom.py` patches the image that `regen.sh` feeds to the code generator. It also
+   applies the OPTIONS screen patch from `tools/options_menu.py` (see below).
 2. `src/rnrr_rompatch.c` patches the same bytes in memory at load time, so the interpreter matches
    the generated C. It finds the sprite emitter's X cull tests by byte signature (so it works on
    both revisions), relocates them to free ROM at `$01:FF10/FF30/FF60` (EU call sites
@@ -123,6 +127,67 @@ regen and configure), with a note in `patches/README.md`.
   every SDL window uses it via `SDL_HINT_WINDOWS_INTRESOURCE_ICON(_SMALL)="1"` in `main()`.
 - `src/rnrr.manifest` (embedded by `rnrr.rc`) sets the UTF-8 active code page, so ANSI paths
   (`GetModuleFileNameA`, `fopen`) work in folders with accents or ñ. Do not remove it.
+
+**PC settings in the game's OPTIONS screen** (garage → SET OPTIONS). The stock screen (bank `$01`,
+`$BC17`-`$BEF3`) lists MUSIC / SOUND / LARRY / EXIT in a small panel between four car bubbles. It
+becomes one Spanish list: OPCIONES with MUSICA, SONIDO, LARRY, FORMATO, PANTALLA, FILTRO,
+MOVIMIENTO and SALIR, plus "CLAVE" / "JUGADOR 1/2" in the password panel. None of that code is in
+`src/gen`, so the interpreter always runs it and the patch needs no regen in either engine.
+- `tools/options_menu.py` is a small 65816 assembler holding the patch. It assembles 549 bytes of
+  original code and text into free ROM at `$01:FA10` and lists the patched sites with the bytes
+  each must hold first. `--write-inc` generates `src/rnrr_options_patch.inc`; `--check <rom>`
+  applies the patch to a copy and disassembles it. `tools/patch_rom.py` imports it, so the regen
+  image matches the running one.
+- `src/rnrr_options.c` `RnrrOptionsPatchRom` applies it at load (after `RnrrRomPatchApply`). If any
+  signature differs, it logs that and keeps the stock menu.
+- Hooks into the stock code:
+  - The text printer `$01:E0FA` is entered at `$E102` with our own string pointer in `$04`
+    (`print_ptr`), so the shared string table at `$01:E228` is untouched.
+  - The toggle chain at `$BD72` goes through `dispatch`. Rows 0-2 keep the stock code, rows 3-6 step a
+    mailbox value, and row 7 exits.
+  - `$BD6E` keeps Y (the direction) across the menu beep `$80:FB6E`, which clobbers it.
+  - `$BDCD` (the value printer), `$BECB` (cursor X and Y), `$BEB6` (8 rows) and `$BC20` (start on
+    SALIR) are redirected or rewritten.
+  - The bubble cars are dropped. Their graphics loads (`$907C` ×4) are skipped, and in the screen's
+    sprite table at `$01:A98F` the four cars get X=$80 with the 9th X bit set (X=384, off screen).
+    The table's layout is `[count][count×4 OAM bytes][n][n high-table bytes]`. Cutting the count
+    instead makes the game read the first car's bytes as the high table, which put the cursor
+    at X=288, out of view.
+  - MUSICA (`$BD7F`, `music_toggle`): the stock code stops the music when it goes off and leaves it
+    stopped, even after leaving the screen. Turning it back on now queues "play" through
+    `$80:F942` with X=0 (no song reload). The song restarts about 2.8 s later.
+- WRAM mailbox at `$7F:FFF0`. Every earlier WRAM dump was zero from `$7F:B250` up.
+
+  | Bytes | Meaning |
+  |---|---|
+  | `+0` | FORMATO: 4:3, 16:9, 21:9, AJUSTAR |
+  | `+1` | PANTALLA: COMPLETA, VENTANA |
+  | `+2` | FILTRO: SUAVIZADA, NITIDA, CRT, TV CLASICA |
+  | `+3` | MOVIMIENTO: SUAVE, ORIGINAL |
+  | `+4` | `$A5` when the menu changed a value |
+  | `+5` | 1 while the screen is open |
+
+- Protocol, in `RnrrOptionsAfterFrame` after every frame (the `after_run_frame` hook):
+  1. If `+4` holds `$A5`, apply and save what changed, then clear it.
+  2. Always write the live settings back into `+0..3`.
+
+  Alt+Enter, resets, save-state loads and rewinds therefore never apply anything by accident.
+  `on_reset` rewrites the mailbox too. A value that changes without `$A5` is logged once, as a
+  safety net; long 1P and 2P runs logged nothing.
+- How each setting is applied and saved:
+
+  | Setting | Applied with | Saved to |
+  |---|---|---|
+  | FORMATO | `RnrrDisplaySetWidescreen` + `ChangeWindowScale(0)` | `mods/preloaded/state.toml` |
+  | MOVIMIENTO | `RnrrDisplaySetPresentationFps` + clock reset + `snesrecomp_desktop_apply_video` (vsync) | `mods/preloaded/state.toml` |
+  | FILTRO | `g_config.shader` + `snesrecomp_desktop_apply_video` (shader reload) | `config.ini`, via `snesrecomp_desktop_save_config` |
+  | PANTALLA | `snesrecomp_desktop_set_fullscreen` | `config.ini`, via `snesrecomp_desktop_save_config` |
+
+  `state.toml` is written by `RnrrSettingsWriteModState` (`src/rnrr_settings.c`), shared with the
+  launcher, so both write the same file the same way.
+- The wide panel: while `+5` is 1 and BG3 row 3 reads "OPCIONES", the host rebuilds BG1 rows 1-17
+  from the password panel's rows 18-26. The granite texture hides the repeat. The game does not
+  re-upload BG1 while the screen is open, and the check makes a stale flag harmless.
 
 **Updates** (`src/rnrr_update.cpp`). At start the launcher asks
 `api.github.com/repos/Cris9870/rock-and-roll-racing-pc/releases/latest` (WinHTTP, background thread)

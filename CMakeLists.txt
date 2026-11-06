@@ -73,6 +73,8 @@ add_executable(RockNRollRacingSNESRecomp
     src/rnrr_display.c
     src/rnrr_mods.c
     src/rnrr_rompatch.c
+    src/rnrr_options.c
+    src/rnrr_settings.c
     src/gen_stubs.c
     src/rnrr_launcher.cpp
     src/rnrr_revision.c

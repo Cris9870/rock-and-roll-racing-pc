@@ -39,6 +39,13 @@ Debajo de cada opción se explica qué hace. Los ajustes se guardan al pulsar JU
   SONIDO
   - Volumen ...... 0 = sin sonido.
 
+Opciones dentro del juego
+-------------------------
+En el garaje, entre carreras, elige SET OPTIONS. El menú OPCIONES del juego
+tiene, además de MUSICA, SONIDO y LARRY, las opciones del PC: FORMATO,
+PANTALLA, FILTRO y MOVIMIENTO. Izquierda/derecha cambia el valor, que se aplica
+al momento y se guarda igual que en el lanzador. SALIR vuelve al garaje.
+
 Controles
 ---------
                       Mando (Xbox)            Teclado

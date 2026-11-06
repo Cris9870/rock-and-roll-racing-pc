@@ -207,9 +207,14 @@ static Ppu *s_snap;
 static Ppu *s_scratch;
 static int s_snap_valid;
 
+/* Set once the mod plugins (or the OPTIONS screen) have chosen a mode; until
+ * then the window's first size asks the mod runtime directly. */
+static int s_ws_known;
+
 void RnrrDisplaySetWidescreen(int mode)
 {
     s_ws_mode = mode >= RNRR_WS_OFF && mode <= RNRR_WS_FIT ? mode : RNRR_WS_OFF;
+    s_ws_known = 1;
 }
 
 int RnrrDisplayWidescreenMode(void)
@@ -226,6 +231,11 @@ void RnrrDisplaySetPresentationFps(int enabled, unsigned fps)
 int RnrrDisplayPresentationEnabled(void)
 {
     return s_fps_enabled;
+}
+
+unsigned RnrrDisplayPresentationRate(void)
+{
+    return s_fps;
 }
 
 static double target_aspect(int drawable_w, int drawable_h)
@@ -1109,7 +1119,7 @@ int RnrrDrawFrame(uint8_t *dst, size_t pitch, const uint8_t *field,
 int RnrrWindowBaseWidth(int frame_w)
 {
     apply_env_overrides();
-    int mode = s_ws_mode != RNRR_WS_OFF ? s_ws_mode : RnrrModsWidescreenMode();
+    int mode = s_ws_known ? s_ws_mode : RnrrModsWidescreenMode();
     if (mode == RNRR_WS_OFF) return (frame_w * 5 + 2) / 4;
     double aspect = 16.0 / 9.0;
     if (mode == RNRR_WS_21_9) aspect = 21.0 / 9.0;

@@ -7,8 +7,16 @@ shape but reads its two bounds from immediates the host rewrites at run time,
 and sets the high-X bit for X >= 256 as well, so widescreen margins get real
 sprites instead of wrapped ones. Usage: patch_rom.py <in.smc> <out.smc>, or
 --c-table to print the patch as a C initializer.
+
+The OPTIONS screen patch (tools/options_menu.py, PC settings in the game's own
+menu) is applied too, so the generator sees the image the game runs.
 """
+import os
 import sys
+
+sys.dont_write_bytecode = True   # no __pycache__ in the checkout
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import options_menu  # noqa: E402
 
 LEFT = (0xFFC0).to_bytes(2, "little")
 RIGHT = (0x0100).to_bytes(2, "little")
@@ -57,6 +65,7 @@ def apply(rom: bytearray) -> None:
     for addr, data in PATCHES:
         off = lorom_offset(addr)
         rom[off:off + len(data)] = data
+    options_menu.apply(rom)
 
 
 def main() -> int:

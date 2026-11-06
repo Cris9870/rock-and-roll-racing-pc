@@ -33,6 +33,7 @@
 #include <string.h>
 #include "rnrr_rompatch.h"
 #include "rnrr_launcher.h"
+#include "rnrr_options.h"
 #include "rnrr_revision.h"
 #include "host_paths.h"
 #include "sha256.h"
@@ -90,8 +91,49 @@ static void rnrr_on_rom_loaded(const uint8_t *rom, size_t size)
         interp_bridge_set_scheduler_aot_policy(0);
         fprintf(stderr, "[rnrr] running through the interpreter\n");
     }
-    if (!getenv("RNRR_NO_ROMPATCH"))  /* test switch: run the unpatched game */
+    if (!getenv("RNRR_NO_ROMPATCH")) {  /* test switch: run the unpatched game */
         RnrrRomPatchApply((uint8_t *)rom, size);
+        RnrrOptionsPatchRom((uint8_t *)rom, size);   /* PC settings in OPTIONS */
+    }
+}
+
+static void rnrr_on_reset(void)
+{
+    RnrrOnReset();
+    RnrrOptionsOnReset();
+}
+
+#include "audio_trace.h"
+/* Test hook: RNRR_TEST_WAV=<dir> RNRR_TEST_WAV_FRAMES=a,b,c writes <dir>/a<N>.wav
+ * at those simulated frames: the last ~2 s the DSP produced, which is there
+ * even with EnableAudio = 0, so music can be checked without a sound device. */
+static void test_wav(unsigned frame)
+{
+    static int init;
+    static const char *dir, *list;
+    if (!init) { init = 1; dir = getenv("RNRR_TEST_WAV"); list = getenv("RNRR_TEST_WAV_FRAMES"); }
+    if (!dir || !list) return;
+    for (const char *p = list; *p;) {
+        char *end;
+        unsigned long f = strtoul(p, &end, 10);
+        if (end == p) break;
+        if (f == frame) {
+            char path[1024];
+            uint64_t start = 0, count = 0;
+            snprintf(path, sizeof(path), "%s/a%u.wav", dir, frame);
+            fprintf(stderr, "[rnrr] wav %s: %s\n", path,
+                    audio_trace_dump_wav(path, -1, 0, &start, &count) == 0 ? "ok" : "failed");
+        }
+        p = *end == ',' ? end + 1 : end;
+    }
+}
+
+static void rnrr_after_run_frame(const SnesDesktopHostFrameStats *stats)
+{
+    static unsigned frame;
+    (void)stats;
+    RnrrOptionsAfterFrame();
+    test_wav(++frame);
 }
 
 static const char kRnrrDefaultConfigIni[] =
@@ -220,7 +262,8 @@ static SnesDesktopHostGame kGameHost = {
     .rom_digest_whole_file = 1,
     .default_config_ini  = kRnrrDefaultConfigIni,
     .on_rom_loaded       = rnrr_on_rom_loaded,
-    .on_reset            = RnrrOnReset,
+    .on_reset            = rnrr_on_reset,
+    .after_run_frame     = rnrr_after_run_frame,
     .prepare_frame       = RnrrPrepareFrame,
     .begin_sim_frame     = RnrrBeginSimFrame,
     .end_sim_frame       = RnrrEndSimFrame,

@@ -42,3 +42,13 @@ snesrecomp.patch
   snapshots the table; the render swaps the snapshots in at their lines and
   gives the guest its own table back afterwards. Fields that upload only in
   vblank record nothing.
+- desktop/host_main.c/.h: live settings for a title's own options screen:
+  `snesrecomp_desktop_set_fullscreen` (the Fullscreen key's path, also when
+  no window exists yet), `snesrecomp_desktop_apply_video` (swap interval +
+  renderer Reconfigure, which reloads g_config.shader) and
+  `snesrecomp_desktop_save_config` (WriteConfigFile on the active config).
+  RNRR's in-game OPTIONS screen uses them; the in-game launcher's
+  ApplyLiveSettings is compiled out without recomp-ui.
+- desktop/host_main.c: SNESRECOMP_HIDDEN_WINDOW=1 creates the game window
+  hidden, for scripted test runs on a desktop that is in use (OpenGL and the
+  shaders still run; SDL's dummy video driver has no OpenGL).

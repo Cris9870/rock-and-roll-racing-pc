@@ -65,6 +65,7 @@ avisa si es otra versión o está dañada.
 | **Guardar** | Contraseñas entre carreras | **Partidas guardadas en cualquier momento** (10 ranuras) y **rebobinado**, también desde el mando |
 | **Pantalla** | — | Pantalla completa o ventana (Alt+Enter) |
 | **Lanzador** | — | En español, con el aspecto del juego, manejable con ratón, teclado o mando |
+| **Opciones en el juego** | Música, sonido y Larry | El menú **OPCIONES** del garaje (SET OPTIONS), en español, también cambia **formato, pantalla, filtro y movimiento** al momento |
 | **Actualizaciones** | — | El lanzador avisa de las versiones nuevas y se actualiza solo con un botón |
 
 ## Capturas
@@ -108,6 +109,10 @@ vuelve. El juego queda en pausa mientras está abierto. Otros atajos de teclado:
 completa, Tab turbo, P pausa, Ctrl+R reiniciar. El botón **Controles** del lanzador muestra esta
 misma tabla.
 
+**Opciones sin salir del juego**: en el garaje, entre carreras, elige **SET OPTIONS**. Además de
+música, sonido y Larry, puedes cambiar **formato, pantalla, filtro y movimiento**: izquierda/derecha
+cambia el valor y se aplica al momento. Se guarda igual que en el lanzador.
+
 ## Preguntas frecuentes
 
 - **¿Dónde se guardan las partidas y las opciones?** En la propia carpeta del programa: `saves\`,
@@ -148,6 +153,10 @@ para la ROM de EE. UU.; este proyecto añade:
   ROM y su aspecto, que genera a partir de tu ROM en tu PC (`src/rnrr_art.cpp`).
 - **Actualizador** (`src/rnrr_update.cpp`): consulta la última release de GitHub, descarga el zip,
   comprueba su SHA-256, lo descomprime aparte y solo entonces reemplaza los archivos del programa.
+- **Opciones del PC dentro del juego** (`tools/options_menu.py`, `src/rnrr_options.c`): un parche
+  65816 amplía la pantalla OPTIONS del propio juego con cuatro filas nuevas, en español y con su
+  fuente. El programa lee lo que eliges a través de un pequeño buzón en la memoria del juego, lo
+  aplica al instante y lo guarda donde lo guarda el lanzador.
 - **Partidas guardadas desde el mando** y el menú de partidas traducido.
 - **Correcciones al motor** (`patches/snesrecomp.patch`): por ejemplo, a pantalla partida el juego
   cambia los sprites a mitad de imagen y el motor solo dibujaba los de la mitad inferior; ahora cada
@@ -225,6 +234,7 @@ press **JUGAR** ("play"). No installation; the folder is portable. The launcher 
 | **Image** | Raw pixels | **Shaders**: *Suavizada* (smooth: Scale2x + FXAA, no jaggies), *Nítida* (sharp), CRT and *TV clásica* (classic TV) |
 | **Controls** | SNES pad | **Xbox controller** (also PlayStation, Switch Pro) and keyboard (WASD + JIKL, Q / O for L / R) |
 | **Saving** | Passwords | **Save states** anytime (10 slots) and **rewind**, also from the pad (Select + RB) |
+| **In-game options** | Music, sound, Larry | The garage's **OPTIONS** screen (SET OPTIONS, in Spanish) also sets **aspect, fullscreen, filter and motion smoothing**, applied instantly |
 | **Updates** | — | The launcher updates itself from GitHub Releases in one click (SHA-256 checked, your files untouched) |
 
 The European release is fully tested; the USA release is supported by byte-signature patching but

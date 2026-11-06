@@ -28,6 +28,7 @@ void RnrrDisplaySetWidescreen(int mode);
 int RnrrDisplayWidescreenMode(void);
 void RnrrDisplaySetPresentationFps(int enabled, unsigned fps);
 int RnrrDisplayPresentationEnabled(void);
+unsigned RnrrDisplayPresentationRate(void);   /* 0: the display's refresh */
 
 void RnrrPrepareFrame(int drawable_w, int drawable_h, int *frame_w, int *frame_h);
 void RnrrBeginSimFrame(unsigned number);
